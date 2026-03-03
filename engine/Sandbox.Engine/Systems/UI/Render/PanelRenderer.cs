@@ -2,36 +2,12 @@
 
 namespace Sandbox.UI;
 
-internal unsafe sealed partial class PanelRenderer
+internal sealed partial class PanelRenderer
 {
 	[ConVar( ConVarFlags.Protected, Help = "Enable drawing text" )]
 	public static bool ui_drawtext { get; set; } = true;
 
 	public Rect Screen { get; internal set; }
-
-	public void Render( RootPanel panel, float opacity = 1.0f )
-	{
-		ThreadSafe.AssertIsMainThread();
-
-		Screen = panel.PanelBounds;
-
-		MatrixStack.Clear();
-		MatrixStack.Push( Matrix.Identity );
-		Matrix = Matrix.Identity;
-
-		RenderModeStack.Clear();
-		RenderModeStack.Push( "normal" );
-		RenderMode = null;
-		SetRenderMode( "normal" );
-
-		LayerStack?.Clear();
-
-		DefaultRenderTarget = Graphics.RenderTarget;
-
-		InitScissor( Screen, panel.CommandList );
-
-		Render( panel, new RenderState { X = Screen.Left, Y = Screen.Top, Width = Screen.Width, Height = Screen.Height, RenderOpacity = opacity } );
-	}
 
 	/// <summary>
 	/// Build command lists for a root panel and all its children.
@@ -43,17 +19,19 @@ internal unsafe sealed partial class PanelRenderer
 
 		Screen = panel.PanelBounds;
 
-		// Initialize matrix state for build phase
 		MatrixStack.Clear();
 		MatrixStack.Push( Matrix.Identity );
 		Matrix = Matrix.Identity;
 
-		// Save off the default render target for layer restoration during build
+		RenderModeStack.Clear();
+		RenderModeStack.Push( "normal" );
+		SetRenderMode( "normal" );
+
 		DefaultRenderTarget = Graphics.RenderTarget;
 
 		LayerStack?.Clear();
 
-		InitScissor( Screen, panel.CommandList );
+		InitScissor( Screen );
 
 		BuildCommandLists( (Panel)panel, new RenderState { X = Screen.Left, Y = Screen.Top, Width = Screen.Width, Height = Screen.Height, RenderOpacity = opacity } );
 	}
@@ -72,19 +50,26 @@ internal unsafe sealed partial class PanelRenderer
 		// Build transform command list (sets GlobalMatrix and TransformMat attribute)
 		BuildTransformCommandList( panel );
 
+		// Update clip only when scissor actually changed
+		var scissorHash = HashCode.Combine( ScissorGPU.Rect, ScissorGPU.CornerRadius, ScissorGPU.Matrix );
+		if ( panel._lastScissorHash != scissorHash )
+		{
+			panel._lastScissorHash = scissorHash;
+			panel.ClipCommandList.Reset();
+			SetScissorAttributes( panel.ClipCommandList, ScissorGPU );
+		}
+
+		// Track render mode so OverrideBlendMode is correct when baking D_BLENDMODE
+		var renderMode = PushRenderMode( panel );
+
 		// Update layer (creates render target if needed for filters/masks)
 		panel.UpdateLayer( panel.ComputedStyle );
 
-		//
-		// Rebuild the command list if dirty
-		//
-		if ( panel.IsRenderDirty )
+		if ( panel.IsRenderDirty || panel.HasPanelLayer )
 		{
 			BuildCommandList( panel, ref state );
 
-			//
 			// Add Content = Text, Image (not children)
-			//
 			if ( panel.HasContent )
 			{
 				try
@@ -106,57 +91,56 @@ internal unsafe sealed partial class PanelRenderer
 		{
 			panel.BuildCommandListsForChildren( this, ref state );
 		}
+
+		if ( renderMode ) PopRenderMode();
 	}
 
 	/// <summary>
-	/// Render a panel - executes pre-built command lists.
-	/// Command lists should be built during tick phase via BuildCommandLists.
+	/// Gather all pre-built per-panel command lists into a single global CL.
+	/// Called after BuildCommandLists during the tick/simulate phase.
 	/// </summary>
-	public void Render( Panel panel, RenderState state )
+	public void GatherCommandLists( RootPanel root, float opacity = 1.0f )
 	{
-		if ( panel?.ComputedStyle == null )
-			return;
+		ThreadSafe.AssertIsMainThread();
 
-		if ( !panel.IsVisible )
-			return;
+		var globalCL = root.PanelCommandList;
+		globalCL.Reset();
 
-		//
-		// Push matrix before culling so Panel.GlobalMatrix is set
-		//
-		var pushed = PushMatrix( panel );
+		Screen = root.PanelBounds;
+		DefaultRenderTarget = Graphics.RenderTarget;
 
-		//
-		// Quickly clip anything before sending to renderer, this doesn't need to be perfect
-		//
-		if ( ShouldEarlyCull( panel ) )
+		InitScissor( Screen, globalCL );
+
+		GatherPanel( root, new RenderState
 		{
-			if ( pushed ) PopMatrix();
-			return;
-		}
+			X = Screen.Left,
+			Y = Screen.Top,
+			Width = Screen.Width,
+			Height = Screen.Height,
+			RenderOpacity = opacity
+		}, globalCL );
+	}
 
-		var renderMode = PushRenderMode( panel );
+	/// <summary>
+	/// Gather a panel's pre-built CL into the global CL, then recurse children.
+	/// No culling here — the GPU-side scissor handles clipping. This keeps
+	/// the gather purely structural so it can be cached aggressively.
+	/// </summary>
+	internal void GatherPanel( Panel panel, RenderState state, CommandList globalCL )
+	{
+		if ( panel?.ComputedStyle == null ) return;
+		if ( !panel.IsVisible ) return;
 
-		//
-		// Execute the pre-built command list
-		//
-		panel.CommandList.ExecuteOnRenderThread();
+		globalCL.InsertList( panel.CommandList );
 
-		// Draw children
 		if ( panel.HasChildren )
-		{
-			panel.RenderChildren( this, ref state );
-		}
+			panel.GatherChildrenCommandLists( this, ref state, globalCL );
 
-		// Execute post-children layer commands (draws filtered result)
 		if ( panel.HasPanelLayer )
 		{
-			// Restore the default render target before executing layer commands.
-			Graphics.RenderTarget = DefaultRenderTarget;
-			panel.LayerCommandList.ExecuteOnRenderThread();
+			globalCL.SetRenderTarget( DefaultRenderTarget );
+			globalCL.InsertList( panel.LayerCommandList );
 		}
-
-		if ( pushed ) PopMatrix();
-		if ( renderMode ) PopRenderMode();
 	}
 
 	internal struct LayerEntry

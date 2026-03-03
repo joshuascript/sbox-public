@@ -1,15 +1,16 @@
-﻿namespace Sandbox.UI;
+﻿using Sandbox.Rendering;
+
+namespace Sandbox.UI;
 
 partial class PanelRenderer
 {
-	private void AddShadowToCommandList( Panel panel, ref RenderState state, in Shadow shadow )
+	private void AddShadowToCommandList( Panel panel, ref RenderState state, in Shadow shadow, CommandList commandList )
 	{
 		if ( shadow.Color.a <= 0 )
 			return;
 
-		var attributes = panel.CommandList.Attributes;
+		var attributes = commandList.Attributes;
 		attributes.Set( "HasInverseScissor", 0 );
-		panel.CommandList.InsertList( panel.ClipCommandList );
 
 		var inset = shadow.Inset;
 		var style = panel.ComputedStyle;
@@ -59,10 +60,10 @@ partial class PanelRenderer
 			attributes.Set( "HasInverseScissor", 1 );
 		}
 
-		panel.CommandList.DrawQuad( shadowRect.Grow( blur ), Material.UI.BoxShadow, color );
+		commandList.DrawQuad( shadowRect.Grow( blur ), Material.UI.BoxShadow, color );
 	}
 
-	internal void BuildCommandList_BoxShadows( Panel panel, ref RenderState state, bool inset )
+	internal void BuildCommandList_BoxShadows( Panel panel, ref RenderState state, bool inset, CommandList commandList )
 	{
 		ThreadSafe.AssertIsMainThread();
 
@@ -77,7 +78,7 @@ partial class PanelRenderer
 			if ( shadows[i].Inset != inset )
 				continue;
 
-			AddShadowToCommandList( panel, ref state, shadows[i] );
+			AddShadowToCommandList( panel, ref state, shadows[i], commandList );
 		}
 	}
 }

@@ -1,8 +1,10 @@
-﻿namespace Sandbox.UI;
+﻿using Sandbox.Rendering;
+
+namespace Sandbox.UI;
 
 internal partial class PanelRenderer
 {
-	private void BuildCommandList_Backdrop( Panel panel, ref RenderState state )
+	private void BuildCommandList_Backdrop( Panel panel, ref RenderState state, CommandList commandList )
 	{
 		ThreadSafe.AssertIsMainThread();
 
@@ -10,10 +12,9 @@ internal partial class PanelRenderer
 		if ( style == null ) return;
 		if ( !panel.HasBackdropFilter ) return;
 
-		var attributes = panel.CommandList.Attributes;
+		var attributes = commandList.Attributes;
 
 		attributes.Set( "HasInverseScissor", 0 );
-		panel.CommandList.InsertList( panel.ClipCommandList );
 
 		var rect = panel.Box.Rect;
 		var opacity = panel.Opacity * state.RenderOpacity;
@@ -39,6 +40,6 @@ internal partial class PanelRenderer
 		attributes.SetCombo( "D_BLENDMODE", OverrideBlendMode );
 
 		attributes.GrabFrameTexture( "FrameBufferCopyTexture", Graphics.DownsampleMethod.GaussianBlur );
-		panel.CommandList.DrawQuad( rect, Material.UI.BackdropFilter, color );
+		commandList.DrawQuad( rect, Material.UI.BackdropFilter, color );
 	}
 }

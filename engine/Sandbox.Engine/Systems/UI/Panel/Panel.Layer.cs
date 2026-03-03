@@ -95,7 +95,12 @@ public partial class Panel
 		LayerCommandList.InsertList( TransformCommandList );
 		LayerCommandList.InsertList( ClipCommandList );
 
-		var attributes = LayerCommandList.Attributes;
+		BuildLayerPopCommandsInto( render, LayerCommandList );
+	}
+
+	private void BuildLayerPopCommandsInto( PanelRenderer render, CommandList commandList )
+	{
+		var attributes = commandList.Attributes;
 
 		//
 		// Shared attributes
@@ -107,9 +112,9 @@ public partial class Panel
 		//
 		// Pre-filter: draw shadows and border before everything else as separate layers
 		//
-		DrawPreFilterShadows();
-		DrawPreFilterBorder();
-		ResetPrefilterAttributes();
+		DrawPreFilterShadows( commandList );
+		DrawPreFilterBorder( commandList );
+		ResetPrefilterAttributes( commandList );
 
 		//
 		// Draw this panel, with filters
@@ -193,13 +198,13 @@ public partial class Panel
 		}
 
 		attributes.SetCombo( "D_BLENDMODE", render.OverrideBlendMode );
-		LayerCommandList.DrawQuad( Box.RectOuter.Grow( growSize ).Ceiling(), Material.UI.Filter, Color.White );
+		commandList.DrawQuad( Box.RectOuter.Grow( growSize ).Ceiling(), Material.UI.Filter, Color.White );
 	}
 
 	/// <summary>
-	/// Draws shadows for the current layer
+	/// Draws shadows for the current layer into the specified command list.
 	/// </summary>
-	private void DrawPreFilterShadows()
+	private void DrawPreFilterShadows( CommandList commandList )
 	{
 		foreach ( var shadow in ComputedStyle.FilterDropShadow )
 		{
@@ -213,21 +218,21 @@ public partial class Panel
 			growSize *= MathF.Max( 1.0f, shadow.Blur * 2.0f );
 			outerRect = outerRect.Grow( growSize );
 
-			ResetPrefilterAttributes();
+			ResetPrefilterAttributes( commandList );
 
-			LayerCommandList.Attributes.Set( "FilterDropShadowScale", Box.RectOuter.Size / outerRect.Size );
-			LayerCommandList.Attributes.Set( "FilterDropShadowOffset", shadowSize );
-			LayerCommandList.Attributes.Set( "FilterDropShadowBlur", shadow.Blur );
-			LayerCommandList.Attributes.Set( "FilterDropShadowColor", shadow.Color );
+			commandList.Attributes.Set( "FilterDropShadowScale", Box.RectOuter.Size / outerRect.Size );
+			commandList.Attributes.Set( "FilterDropShadowOffset", shadowSize );
+			commandList.Attributes.Set( "FilterDropShadowBlur", shadow.Blur );
+			commandList.Attributes.Set( "FilterDropShadowColor", shadow.Color );
 
-			LayerCommandList.DrawQuad( outerRect, Material.UI.DropShadow, Color.White );
+			commandList.DrawQuad( outerRect, Material.UI.DropShadow, Color.White );
 		}
 	}
 
 	/// <summary>
-	/// Draws borders for the current layer
+	/// Draws borders for the current layer into the specified command list.
 	/// </summary>
-	private void DrawPreFilterBorder()
+	private void DrawPreFilterBorder( CommandList commandList )
 	{
 		float filterBorderWidth = ComputedStyle.FilterBorderWidth.Value.GetPixels( 1.0f );
 		filterBorderWidth *= ScaleToScreen;
@@ -239,25 +244,25 @@ public partial class Panel
 			// Grow outerRect so that it can fit the border
 			outerRect = outerRect.Grow( filterBorderWidth );
 
-			ResetPrefilterAttributes();
+			ResetPrefilterAttributes( commandList );
 
-			LayerCommandList.Attributes.Set( "FilterBorderWrapColorScale", Box.RectOuter.Size / outerRect.Size );
-			LayerCommandList.Attributes.Set( "FilterBorderWrapColor", ComputedStyle.FilterBorderColor.Value );
-			LayerCommandList.Attributes.Set( "FilterBorderWrapWidth", filterBorderWidth );
+			commandList.Attributes.Set( "FilterBorderWrapColorScale", Box.RectOuter.Size / outerRect.Size );
+			commandList.Attributes.Set( "FilterBorderWrapColor", ComputedStyle.FilterBorderColor.Value );
+			commandList.Attributes.Set( "FilterBorderWrapWidth", filterBorderWidth );
 
-			LayerCommandList.DrawQuad( outerRect, Material.UI.BorderWrap, Color.White );
+			commandList.DrawQuad( outerRect, Material.UI.BorderWrap, Color.White );
 		}
 	}
 
-	private void ResetPrefilterAttributes()
+	private void ResetPrefilterAttributes( CommandList commandList )
 	{
-		LayerCommandList.Attributes.Set( "FilterDropShadowScale", 0 );
-		LayerCommandList.Attributes.Set( "FilterDropShadowOffset", 0 );
-		LayerCommandList.Attributes.Set( "FilterDropShadowBlur", 0 );
-		LayerCommandList.Attributes.Set( "FilterDropShadowColor", 0 );
+		commandList.Attributes.Set( "FilterDropShadowScale", 0 );
+		commandList.Attributes.Set( "FilterDropShadowOffset", 0 );
+		commandList.Attributes.Set( "FilterDropShadowBlur", 0 );
+		commandList.Attributes.Set( "FilterDropShadowColor", 0 );
 
-		LayerCommandList.Attributes.Set( "FilterBorderWrapColor", 0 );
-		LayerCommandList.Attributes.Set( "FilterBorderWrapWidth", 0 );
+		commandList.Attributes.Set( "FilterBorderWrapColor", 0 );
+		commandList.Attributes.Set( "FilterBorderWrapWidth", 0 );
 	}
 
 	/// <summary>
