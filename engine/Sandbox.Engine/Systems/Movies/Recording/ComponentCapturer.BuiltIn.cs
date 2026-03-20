@@ -68,7 +68,22 @@ file sealed class SkinnedModelRendererCapturer : ComponentCapturer<SkinnedModelR
 
 		recorder.Property( nameof( SkinnedModelRenderer.UseAnimGraph ) ).Capture();
 
-		if ( component.UseAnimGraph )
+		var sceneModel = component.SceneModel;
+
+		if ( sceneModel.IsValid() && sceneModel.HasBoneOverrides() )
+		{
+			if ( component.Model is not { } model ) return;
+
+			var bonesTrack = recorder.Property( "Bones" );
+
+			for ( var i = 0; i < model.BoneCount; i++ )
+			{
+				var boneName = model.GetBoneName( i );
+
+				bonesTrack.Property( boneName ).Capture();
+			}
+		}
+		else if ( component.UseAnimGraph )
 		{
 			if ( component.Parameters.Graph is not { } graph ) return;
 

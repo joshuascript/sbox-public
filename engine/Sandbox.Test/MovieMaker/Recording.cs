@@ -5,6 +5,7 @@ using Sandbox.SceneTests;
 using System;
 using System.Text.Json.Nodes;
 using Sandbox.Internal;
+using Sandbox.MovieMaker.Properties;
 
 namespace TestMovieMaker;
 
@@ -254,6 +255,65 @@ public sealed class RecorderTests : SceneTests
 		// Tint changed from the prefab's default value, so it should be recorded
 
 		Assert.IsNotNull( tintTrack );
+	}
+
+	[TestMethod]
+	public void ChangingParent()
+	{
+		var foo = new GameObject( "Foo" );
+		var bar = new GameObject( "Bar" );
+
+		var options = new MovieRecorderOptions()
+			.WithCaptureGameObject( foo )
+			.WithCaptureGameObject( bar );
+
+		var recorder = new MovieRecorder( Game.ActiveScene, options );
+
+		recorder.Capture();
+		recorder.Advance( 0.9d );
+		recorder.Capture();
+		recorder.Advance( 0.1d );
+
+		foo.Parent = bar;
+
+		recorder.Capture();
+		recorder.Advance( 0.9d );
+		recorder.Capture();
+		recorder.Advance( 0.1d );
+
+		foo.Parent = null;
+
+		recorder.Capture();
+		recorder.Advance( 1d );
+		recorder.Capture();
+
+		var clip = recorder.ToClip();
+
+		Console.WriteLine( Json.Serialize( clip ) );
+
+		var barTrack = clip.GetReference<GameObject>( bar.Name );
+
+		Assert.IsNotNull( barTrack );
+
+		var parentTrack = clip.GetReferenceProperty<GameObject>( foo.Name, nameof( GameObject.Parent ) );
+
+		// Foo's parent changed, so we should have recorded a track for that
+
+		Assert.IsNotNull( parentTrack );
+
+		BindingReference<GameObject> parent;
+
+		Assert.IsTrue( parentTrack.TryGetValue( 0.5d, out parent ) );
+		Assert.AreEqual( null, parent.TrackId );
+		Assert.IsTrue( parentTrack.TryGetValue( 1.5d, out parent ) );
+		Assert.AreEqual( barTrack.Id, parent.TrackId );
+		Assert.IsTrue( parentTrack.TryGetValue( 2.5d, out parent ) );
+		Assert.AreEqual( null, parent.TrackId );
+
+		// We shouldn't have a Bar.Parent track, because its parent
+		// never changes
+
+		Assert.IsNull( clip.GetReferenceProperty<GameObject>( bar.Name, nameof( GameObject.Parent ) ) );
 	}
 
 	/// <summary>

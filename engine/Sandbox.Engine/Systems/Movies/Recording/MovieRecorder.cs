@@ -65,6 +65,8 @@ public sealed partial class MovieRecorder
 
 	internal MovieTime LastCaptureTime { get; private set; }
 
+	internal event Action<MovieRecorder>? Stopped;
+
 	/// <summary>
 	/// Create a new <see cref="MovieRecorder"/>, recording the given <paramref name="scene"/> with the given <paramref name="options"/>.
 	/// </summary>
@@ -253,6 +255,7 @@ public sealed partial class MovieRecorder
 	/// <summary>
 	/// Starts recording the scene.
 	/// Stop recording by calling <see cref="Stop"/>, or disposing the returned object.
+	/// Recording will automatically stop when the recorded scene is being destroyed.
 	/// </summary>
 	public IDisposable Start()
 	{
@@ -264,7 +267,10 @@ public sealed partial class MovieRecorder
 	/// </summary>
 	public void Stop()
 	{
-		MovieRecorderSystem.Current.Stop( this );
+		if ( MovieRecorderSystem.Current.Stop( this ) )
+		{
+			Stopped?.Invoke( this );
+		}
 	}
 
 	/// <summary>
@@ -352,11 +358,21 @@ file sealed class MovieRecorderSystem : GameObjectSystem<MovieRecorderSystem>
 			recorder.Capture();
 		}
 
-		return new DisposeAction( () => Stop( recorder ) );
+		return new DisposeAction( recorder.Stop );
 	}
 
-	public void Stop( MovieRecorder recorder )
+	public bool Stop( MovieRecorder recorder )
 	{
-		_activeRecorders.Remove( recorder );
+		return _activeRecorders.Remove( recorder );
+	}
+
+	public override void Dispose()
+	{
+		foreach ( var recorder in _activeRecorders.ToArray() )
+		{
+			recorder.Stop();
+		}
+
+		base.Dispose();
 	}
 }

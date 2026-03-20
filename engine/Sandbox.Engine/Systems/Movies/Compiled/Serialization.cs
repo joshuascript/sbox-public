@@ -12,6 +12,26 @@ namespace Sandbox.MovieMaker.Compiled;
 partial class MovieClip
 {
 	public IMovieResource ToResource() => new EmbeddedMovieResource { Compiled = this };
+
+	internal ImmutableArray<Package> ResolvePrimaryPackages()
+	{
+		var packages = new HashSet<Package>();
+
+		foreach ( var track in Tracks.OfType<ICompiledPropertyTrack>() )
+		{
+			foreach ( var block in track.Blocks.OfType<ICompiledConstantBlock>() )
+			{
+				if ( block.Serialized is not { } node ) continue;
+
+				foreach ( var package in Cloud.ResolvePrimaryAssetsFromJson( node ) )
+				{
+					packages.Add( package );
+				}
+			}
+		}
+
+		return [.. packages];
+	}
 }
 
 file sealed class ClipConverter : JsonConverter<MovieClip>

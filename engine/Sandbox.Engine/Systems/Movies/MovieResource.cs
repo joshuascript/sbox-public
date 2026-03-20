@@ -1,4 +1,5 @@
-﻿using Sandbox.MovieMaker.Compiled;
+﻿using System.Collections.Immutable;
+using Sandbox.MovieMaker.Compiled;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -113,7 +114,14 @@ public sealed class EmbeddedMovieResource : IMovieResource
 	public MovieClip? Compiled
 	{
 		get => _compiled ??= _project?.Compile();
-		set => _compiled = value;
+		set
+		{
+			_compiled = value;
+
+			ReferencedPackages = value?.ResolvePrimaryPackages()
+				.Select( x => $"{x.FullIdent}#{x.Revision.VersionId}" )
+				.ToImmutableArray() ?? [];
+		}
 	}
 
 	/// <inheritdoc />
@@ -123,6 +131,10 @@ public sealed class EmbeddedMovieResource : IMovieResource
 		get => _editorData ??= _project?.Serialize();
 		set => _editorData = value;
 	}
+
+	[JsonInclude]
+	[JsonPropertyName( "__references" )]
+	internal ImmutableArray<string> ReferencedPackages { get; set; } = [];
 
 	/// <inheritdoc />
 	public void StateHasChanged( IMovieProject project )
