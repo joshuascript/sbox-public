@@ -160,12 +160,12 @@ VS
 		[loop]
 		for ( uint lightIndex = 0u; lightIndex < uint( NumDynamicLights ); ++lightIndex )
 		{
-			BinnedLight light = BinnedLightBuffer[ lightIndex ];
+			BinnedLight light = BinnedLightBufferV2[ lightIndex ];
 
 			float3 lightPosition = light.GetPosition();
 			float FLOAT32_MAX = 3.402823466e+38;
 
-			if ( light.GetRadius() == FLOAT32_MAX )
+			if ( light.Radius == FLOAT32_MAX )
 			{
 				return lightIndex;
 			}
@@ -183,10 +183,10 @@ VS
 		if ( sunLightIndex == -1 )
 			return;
 
-		BinnedLight sunLight = BinnedLightBuffer[ sunLightIndex ];
+		BinnedLight sunLight = BinnedLightBufferV2[ sunLightIndex ];
 
 		sunDirectionWs = normalize( sunLight.GetPosition() );
-		sunColor = sunLight.GetColor();
+		sunColor = sunLight.Color;
 	}
 
 	PS_INPUT MainVs( const VS_INPUT i )
