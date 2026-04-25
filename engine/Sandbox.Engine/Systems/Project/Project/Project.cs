@@ -178,7 +178,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Code folder of the project.
 	/// </summary>
-	public string GetCodePath() => System.IO.Path.Combine( RootDirectory.FullName, "Code" );
+	public string GetCodePath() => SandboxSystemExtensions.CombinePlatformPath( RootDirectory.FullName, "Code" );
 
 	/// <summary>
 	/// Returns true if the Code path exists
@@ -188,7 +188,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Editor folder of the project.
 	/// </summary>
-	public string GetEditorPath() => System.IO.Path.Combine( RootDirectory.FullName, "Editor" );
+	public string GetEditorPath() => SandboxSystemExtensions.CombinePlatformPath( RootDirectory.FullName, "Editor" );
 
 	/// <summary>
 	/// Returns true if the Editor path exists
@@ -198,13 +198,13 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Assets folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
-	public string GetAssetsPath() => System.IO.Path.Combine( RootDirectory.FullName, "Assets" );
+	public string GetAssetsPath() => SandboxSystemExtensions.CombinePlatformPath( RootDirectory.FullName, "Assets" );
 
 	/// <summary>
 	/// Absolute path to the Localization folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
 	/// <returns></returns>
-	public string GetLocalizationPath() => System.IO.Path.Combine( RootDirectory.FullName, "Localization" );
+	public string GetLocalizationPath() => SandboxSystemExtensions.CombinePlatformPath( RootDirectory.FullName, "Localization" );
 
 	/// <summary>
 	/// Returns true if the Assets path exists
