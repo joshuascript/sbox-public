@@ -39,7 +39,7 @@ internal class SignBinaries() : Step( "SignBinaries" )
 		"toolscenenodes.dll",
 		"vfx_vulkan.dll",
 		"visbuilder.dll",
-		"vpk.exe",
+
 		"vrad2.exe",
 		"vrad3.exe",
 		"qt5_plugins/imageformats/qgif.dll",
