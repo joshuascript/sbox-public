@@ -22,7 +22,7 @@ public static partial class SandboxSystemExtensions
             if ( string.IsNullOrEmpty( segment ) )
                 continue;
 
-            string? match = System.IO.Directory.Exists( current )
+            string match = System.IO.Directory.Exists( current )
                 ? System.IO.Directory.EnumerateDirectories( current )
                     .Select( System.IO.Path.GetFileName )
                     .FirstOrDefault( e => string.Equals( e, segment, StringComparison.OrdinalIgnoreCase ) )
