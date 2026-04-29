@@ -411,6 +411,7 @@ internal sealed partial class PackageLoader : IDisposable
 		var ordered = new AssemblyOrderer();
 
 		var assemblyList = package.AssemblyFileSystem.FindFile( "", "*.dll", true ).ToArray();
+		Log.Info( $"[Claude][PackageLoader] {package.Package.FullIdent} found {assemblyList.Length} assemblies: [{string.Join( ", ", assemblyList )}]" );
 
 		foreach ( var assemblyName in assemblyList.OrderBy( x => x.Length ) ) // TODO - we'll have to deal with this at some point
 		{
