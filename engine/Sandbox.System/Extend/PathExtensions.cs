@@ -15,9 +15,13 @@ public static partial class SandboxSystemExtensions
 		if ( !OperatingSystem.IsLinux() || path.Length == 0 )
 			return System.IO.Path.Combine( path );
 
-		string current = string.Empty;
+		var combined = System.IO.Path.Combine( path ).Replace( '\\', '/' );
 
-		foreach ( string segment in System.IO.Path.Combine( path ).Replace( '\\', '/' ).Split( '/' ) )
+		// Preserve leading '/' for absolute paths — Path.Combine("", "home") drops it,
+		// turning "/home/foo" into "home/foo" and breaking every Directory.Exists check.
+		string current = combined.StartsWith( '/' ) ? "/" : string.Empty;
+
+		foreach ( string segment in combined.Split( '/' ) )
 		{
 			if ( string.IsNullOrEmpty( segment ) )
 				continue;

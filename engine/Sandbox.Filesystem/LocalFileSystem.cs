@@ -24,7 +24,6 @@ internal class LocalFileSystem : BaseFileSystem
 		}
 
 		var rootPath = Physical.ConvertPathFromInternal( rootFolder );
-		Log.Info( $"[Claude][LocalFileSystem] rootFolder='{rootFolder}' rootPath='{rootPath}'" );
 		system = new Zio.FileSystems.SubFileSystem( Physical, rootPath );
 
 		if ( makereadonly )

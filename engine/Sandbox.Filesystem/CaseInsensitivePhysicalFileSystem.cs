@@ -50,18 +50,12 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 		{
 			var entries = GetDirectoryEntries( resolvedDir );
 			if ( entries is null || !entries.TryGetValue( components[i], out var realName ) )
-			{
-				Log.Info( $"[Claude][CIFS] miss segment '{components[i]}' in '{resolvedDir}' for path '{path}'" );
 				return path;
-			}
 
 			resolvedDir = resolvedDir == "/"
 				? $"/{realName}"
 				: $"{resolvedDir}/{realName}";
 		}
-
-		if ( !string.Equals( path, resolvedDir, StringComparison.Ordinal ) )
-			Log.Info( $"[Claude][CIFS] rewrite '{path}' -> '{resolvedDir}'" );
 
 		_resolvedPathCache.TryAdd( path, resolvedDir );
 		return resolvedDir;

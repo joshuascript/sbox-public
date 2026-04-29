@@ -101,7 +101,6 @@ internal sealed class MenuDll : IMenuDll
 
 		Enroller.OnAssemblyAdded += ( a ) =>
 		{
-			Log.Info( $"[Claude][MenuDll] OnAssemblyAdded: {a.Assembly.GetName().Name}" );
 			Game.TypeLibrary.AddAssembly( a.Assembly, true );
 			Game.NodeLibrary.AddAssembly( a.Assembly );
 			ConVarSystem.AddAssembly( a.Assembly, "menu", "menu" );
@@ -145,12 +144,9 @@ internal sealed class MenuDll : IMenuDll
 		Sandbox.Services.Messaging.OnMessage += OnMessageFromBackend;
 
 		// We shouldn't actually have anything to compile on retail
-		Log.Info( "[Claude][MenuDll] CompileAsync starting" );
 		await Project.CompileAsync();
-		Log.Info( "[Claude][MenuDll] CompileAsync done, calling LoadPackage(local.menu#local)" );
 
 		Enroller.LoadPackage( "local.menu#local" );
-		Log.Info( "[Claude][MenuDll] LoadPackage(local.menu#local) returned" );
 
 		if ( IMenuSystem.Current != null )
 		{

@@ -321,32 +321,7 @@ public class BaseFileSystem
 	{
 		// Log.Trace( $"CreateFileSystem( {path} ) [{GetFullPath(path)}]" );
 
-		var fixedPath = FixPath( path );
-
-		// On Linux, round-trip the path through the underlying filesystem so that
-		// case-insensitive resolution (CaseInsensitivePhysicalFileSystem) canonicalizes
-		// the SubPath against actual on-disk casing. SubFileSystem then stores the
-		// canonical case and downstream Ordinal prefix-strip checks succeed.
-		if ( OperatingSystem.IsLinux() )
-		{
-			try
-			{
-				if ( system.DirectoryExists( fixedPath ) )
-				{
-					var diskPath = system.ConvertPathToInternal( fixedPath );
-					var canonical = system.ConvertPathFromInternal( diskPath ).FullName;
-					if ( !string.Equals( fixedPath, canonical, StringComparison.Ordinal ) )
-						Log.Info( $"[Claude][CreateSubSystem] '{fixedPath}' -> '{canonical}'" );
-					fixedPath = canonical;
-				}
-			}
-			catch ( System.Exception e )
-			{
-				Log.Info( $"[Claude][CreateSubSystem] round-trip failed for '{fixedPath}': {e.Message}" );
-			}
-		}
-
-		var sub = new Zio.FileSystems.SubFileSystem( system, fixedPath, false );
+		var sub = new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false );
 		return new BaseFileSystem( sub );
 	}
 
