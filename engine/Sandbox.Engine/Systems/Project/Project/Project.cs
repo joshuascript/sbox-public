@@ -123,6 +123,7 @@ public sealed partial class Project
 		try
 		{
 			RootDirectory = new DirectoryInfo( System.IO.Path.GetDirectoryName( ConfigFilePath ) );
+			PlatformFileSystem.RootDirectory = RootDirectory;
 			Assert.True( RootDirectory.Exists, $"{RootDirectory} does not exist" );
 
 			if ( !ConfigFilePath.EndsWith( ".sbproj" ) )
@@ -178,7 +179,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Code folder of the project.
 	/// </summary>
-	public string GetCodePath() => PlatformPath.Combine( RootDirectory.FullName, "Code" );
+	public string GetCodePath() => PlatformFileSystem.Combine( RootDirectory.FullName, "Code" );
 
 	/// <summary>
 	/// Returns true if the Code path exists
@@ -188,7 +189,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Editor folder of the project.
 	/// </summary>
-	public string GetEditorPath() => PlatformPath.Combine( RootDirectory.FullName, "Editor" );
+	public string GetEditorPath() => PlatformFileSystem.Combine( RootDirectory.FullName, "Editor" );
 
 	/// <summary>
 	/// Returns true if the Editor path exists
@@ -198,13 +199,13 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Assets folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
-	public string GetAssetsPath() => PlatformPath.Combine( RootDirectory.FullName, "Assets" );
+	public string GetAssetsPath() => PlatformFileSystem.Combine( RootDirectory.FullName, "Assets" );
 
 	/// <summary>
 	/// Absolute path to the Localization folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
 	/// <returns></returns>
-	public string GetLocalizationPath() => PlatformPath.Combine( RootDirectory.FullName, "Localization" );
+	public string GetLocalizationPath() => PlatformFileSystem.Combine( RootDirectory.FullName, "Localization" );
 
 	/// <summary>
 	/// Returns true if the Assets path exists
