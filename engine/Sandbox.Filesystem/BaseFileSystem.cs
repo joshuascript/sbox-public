@@ -34,6 +34,7 @@ public class BaseFileSystem
 	/// Returns true if this filesystem is read only
 	/// </summary>
 	public bool IsReadOnly => system is ReadOnlyFileSystem;
+	private bool IsLinux() => OperatingSystem.IsLinux();
 
 	internal bool WatchEnabled = true;
 	internal bool PendingDispose = false;
@@ -321,7 +322,8 @@ public class BaseFileSystem
 	{
 		// Log.Trace( $"CreateFileSystem( {path} ) [{GetFullPath(path)}]" );
 
-		var sub = new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false );
+		var sub = IsLinux() ? new CaseInsensitiveSubFileSystem( system, FixPath ( path ), false ) : 
+			new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false );
 		return new BaseFileSystem( sub );
 	}
 
