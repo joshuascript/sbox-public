@@ -322,7 +322,7 @@ public class BaseFileSystem
 	{
 		// Log.Trace( $"CreateFileSystem( {path} ) [{GetFullPath(path)}]" );
 
-		var sub = IsLinux() ? new CaseInsensitiveSubFileSystem( system, FixPath ( path ), false ) : 
+		var sub = IsLinux() ? new CaseInsensitiveSubFileSystem( system, FixPath( path ), false ) :
 			new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false );
 		return new BaseFileSystem( sub );
 	}

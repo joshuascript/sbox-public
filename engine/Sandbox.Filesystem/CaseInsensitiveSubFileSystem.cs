@@ -29,7 +29,7 @@ internal sealed class CaseInsensitiveSubFileSystem : SubFileSystem
 		var sub = SubPath.FullName;
 
 		if ( !fullPath.StartsWith( sub, StringComparison.OrdinalIgnoreCase )
-			|| ( fullPath.Length > sub.Length && fullPath[sub.Length] != UPath.DirectorySeparator ) )
+			|| (fullPath.Length > sub.Length && fullPath[sub.Length] != UPath.DirectorySeparator) )
 		{
 			throw new InvalidOperationException( $"The path `{path}` returned by the delegate filesystem is not rooted to the subpath `{SubPath}`" );
 		}
