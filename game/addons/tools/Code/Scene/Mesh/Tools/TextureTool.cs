@@ -117,6 +117,28 @@ public sealed partial class TextureTool( MeshTool tool ) : SelectionTool<MeshFac
 		DrawBounds();
 	}
 
+	public override void BuildSceneContextMenu( Menu menu, Ray ray, SceneTraceResult? trace )
+	{
+		base.BuildSceneContextMenu( menu, ray, trace );
+
+		bool any = Selection.OfType<MeshFace>().Any( x => x.IsValid() );
+
+		if ( any )
+		{
+			menu.AddSeparator();
+
+			var ops = menu.AddMenu( "Texture Operations", "gradient" );
+			AddMenuOption( ops, "Apply Material", "format_color_fill", "mesh.apply-material", true );
+			AddMenuOption( ops, "Apply by Hotspot", "my_location", "mesh.apply-hotspot", true );
+			AddMenuOption( ops, "Apply by Hotspot (Per Face)", "texture", "mesh.apply-hotspot-per-face", true );
+			AddMenuOption( ops, "Fast Texture Tool", "edit", "mesh.fast-texture-tool", true );
+
+			var sel = menu.AddMenu( "Texture Selection", "select_all" );
+			AddMenuOption( sel, "Invert Selection", "swap_vert", InvertCurrentSelection, "mesh.invert-selection", true );
+			sel.AddOption( "Select All", "select_all", () => InvokeShortcut( "mesh.select-all" ), "mesh.select-all" );
+		}
+	}
+
 	protected override IEnumerable<MeshFace> ConvertSelectionToCurrentType()
 	{
 		var selectedEdges = Selection.OfType<MeshEdge>().ToHashSet();

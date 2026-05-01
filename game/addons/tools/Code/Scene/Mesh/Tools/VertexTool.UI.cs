@@ -103,7 +103,7 @@ partial class VertexTool
 			Layout.AddStretchCell();
 		}
 
-		[Shortcut( "editor.select-all", "CTRL+A", typeof( SceneViewWidget ) )]
+		[Shortcut( "mesh.select-all", "CTRL+A", typeof( SceneViewWidget ) )]
 		private void SelectAll()
 		{
 			using var scope = SceneEditorSession.Scope();
