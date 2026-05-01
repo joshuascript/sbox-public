@@ -160,17 +160,22 @@ partial class VertexPaintTool
 				return;
 			}
 
-			var (count, name) = _tool.LimitMode switch
+			var count = _tool.LimitMode switch
 			{
-				PaintLimitMode.Objects => (_tool._selectedMeshes.Count,
-					_tool._selectedMeshes.Count == 1 ? "object" : "objects"),
-				PaintLimitMode.Faces => (SelectionTool.GetAllSelected<MeshFace>().Count(),
-					SelectionTool.GetAllSelected<MeshFace>().Count() == 1 ? "face" : "faces"),
-				PaintLimitMode.Edges => (SelectionTool.GetAllSelected<MeshEdge>().Count(),
-					SelectionTool.GetAllSelected<MeshEdge>().Count() == 1 ? "edge" : "edges"),
-				PaintLimitMode.Vertices => (SelectionTool.GetAllSelected<MeshVertex>().Count(),
-					SelectionTool.GetAllSelected<MeshVertex>().Count() == 1 ? "vertex" : "vertices"),
-				_ => (0, "selected")
+				PaintLimitMode.Objects => _tool._selectedMeshes.Count,
+				PaintLimitMode.Faces => _tool.GetSelectedElements<MeshFace>().Count(),
+				PaintLimitMode.Edges => _tool.GetSelectedElements<MeshEdge>().Count(),
+				PaintLimitMode.Vertices => _tool.GetSelectedElements<Editor.MeshEditor.MeshVertex>().Count(),
+				_ => 0
+			};
+
+			var name = _tool.LimitMode switch
+			{
+				PaintLimitMode.Objects => count == 1 ? "object" : "objects",
+				PaintLimitMode.Faces => count == 1 ? "face" : "faces",
+				PaintLimitMode.Edges => count == 1 ? "edge" : "edges",
+				PaintLimitMode.Vertices => count == 1 ? "vertex" : "vertices",
+				_ => "selected"
 			};
 
 			_selectionCountLabel.Visible = true;

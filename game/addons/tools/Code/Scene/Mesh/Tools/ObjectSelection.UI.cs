@@ -1,5 +1,6 @@
 ﻿
 using HalfEdgeMesh;
+using System.Text.Json.Nodes;
 
 namespace Editor.MeshEditor;
 
@@ -54,6 +55,7 @@ partial class ObjectSelection
 					CreateButton( "Center Origin", "center_focus_strong", "mesh.center-origin", CenterOrigin, _meshes.Length > 0, grid );
 					CreateButton( "Merge Meshes", "join_full", "mesh.merge-meshes", MergeMeshes, _meshes.Length > 1, grid );
 					CreateButton( "Merge Meshes By Edge", "link", null, MergeMeshesByEdge, _meshes.Length > 1, grid );
+					CreateButton( "Separate Mesh Components", "call_split", "mesh.separate-components", SeparateComponents, _meshes.Length > 0, grid );
 
 					grid.AddStretchCell();
 
@@ -107,6 +109,86 @@ partial class ObjectSelection
 			}
 
 			Layout.AddStretchCell();
+		}
+
+		[Shortcut( "mesh.separate-components", "ALT+N", typeof( SceneViewWidget ) )]
+		void SeparateComponents()
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			var options = new GameObject.SerializeOptions();
+
+			using ( SceneEditorSession.Active.UndoScope( "Separate Mesh Components" )
+				.WithComponentChanges( _meshes )
+				.WithGameObjectCreations()
+				.WithGameObjectDestructions( _meshes.Select( x => x.GameObject ) )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				var newSelection = new List<GameObject>();
+
+				foreach ( var meshComponent in _meshes )
+				{
+					var mesh = meshComponent.Mesh;
+					if ( mesh is null ) continue;
+
+					var allFaces = mesh.FaceHandles.ToList();
+					mesh.FindFaceIslands( allFaces, out var islands );
+
+					if ( islands.Count <= 1 )
+					{
+						newSelection.Add( meshComponent.GameObject );
+						continue;
+					}
+
+					foreach ( var island in islands )
+					{
+						var go = new GameObject( meshComponent.GameObject.Name );
+						go.WorldTransform = meshComponent.WorldTransform;
+						go.MakeNameUnique();
+
+						meshComponent.GameObject.AddSibling( go, false );
+
+						var newMeshComponent = go.Components.Create<MeshComponent>( true );
+						var json = meshComponent.Serialize( options );
+						SceneUtility.MakeIdGuidsUnique( json as JsonObject );
+
+						newMeshComponent.DeserializeImmediately( json as JsonObject );
+
+						var newMesh = newMeshComponent.Mesh;
+						var islandIndices = new HashSet<int>( island.Select( f => f.Index ) );
+
+						var facesToRemove = newMesh.FaceHandles
+							.Where( f => !islandIndices.Contains( f.Index ) )
+							.ToArray();
+
+						newMesh.RemoveFaces( facesToRemove );
+
+						var bounds = newMesh.CalculateBounds( go.WorldTransform );
+						var center = bounds.Center;
+						var localCenter = go.WorldTransform.PointToLocal( center );
+
+						newMesh.ApplyTransform( new Transform( -localCenter ) );
+						go.WorldPosition = center;
+
+						newMeshComponent.RebuildMesh();
+
+						newSelection.Add( go );
+					}
+
+					meshComponent.GameObject.Destroy();
+				}
+
+				if ( newSelection.Count > 0 )
+				{
+					foreach ( var go in newSelection )
+						selection.Add( go );
+				}
+			}
 		}
 
 		[Shortcut( "mesh.mirror-tool", "SHIFT+F", typeof( SceneViewWidget ) )]
@@ -176,6 +258,7 @@ partial class ObjectSelection
 			_tool.ClearPivot();
 		}
 
+		[Shortcut( "mesh.bake-scale", "", typeof( SceneViewWidget ) )]
 		public void BakeScale()
 		{
 			using var scope = SceneEditorSession.Scope();
@@ -192,6 +275,7 @@ partial class ObjectSelection
 			}
 		}
 
+		[Shortcut( "mesh.flip-all-mesh-faces", "F", typeof( SceneViewWidget ) )]
 		public void FlipMesh()
 		{
 			using var scope = SceneEditorSession.Scope();
@@ -289,6 +373,24 @@ partial class ObjectSelection
 				var selection = SceneEditorSession.Active.Selection;
 				selection.Set( sourceMesh.GameObject );
 			}
+		}
+
+		[Shortcut( "mesh.frame-selection", "SHIFT+A", typeof( SceneViewWidget ) )]
+		private void FrameSelection()
+		{
+			if ( _gos.Length == 0 )
+				return;
+
+			var bounds = _gos[0].GetBounds()
+				.AddBBox( BBox.FromPositionAndSize( _gos[0].WorldPosition, 16 ) );
+
+			for ( var i = 1; i < _gos.Length; i++ )
+			{
+				bounds = bounds.AddBBox( _gos[i].GetBounds() );
+				bounds = bounds.AddBBox( BBox.FromPositionAndSize( _gos[i].WorldPosition, 16 ) );
+			}
+
+			_gos[0].Scene.Editor.FrameTo( bounds );
 		}
 
 		public void MergeMeshesByEdge()
