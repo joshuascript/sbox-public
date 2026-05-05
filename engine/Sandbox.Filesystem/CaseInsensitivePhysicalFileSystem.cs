@@ -15,14 +15,12 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	/// </summary>
 	private readonly ConcurrentDictionary<string, Dictionary<string, string>> _directoryCache = new( StringComparer.Ordinal );
 
-	/// <summary>
-	/// Input path (case-insensitive key) -> resolved path with correct on-disk casing.
-	/// </summary>
-	private readonly ConcurrentDictionary<string, string> _resolvedPathCache = new( StringComparer.OrdinalIgnoreCase );
 
 	protected override string ConvertPathToInternalImpl( UPath path )
 	{
-		return ResolvePathCasing( base.ConvertPathToInternalImpl( path ) );
+		var resolved = ResolvePathCasing( base.ConvertPathToInternalImpl( path ) );
+		//Log.Info( $"[Linux CIPhys] ConvertPathToInternal {path} -> {resolved}" );
+		return resolved;
 	}
 
 	/// <summary>
@@ -35,8 +33,14 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 		if ( path.Length < 2 )
 			return path;
 
-		if ( _resolvedPathCache.TryGetValue( path, out var cached ) )
-			return cached;
+		// Fast path: if the OS finds it with the casing as-given, no resolution needed.
+		// One stat() (warm dentry cache: sub-microsecond) beats the per-component walk
+		// for any path that's already correctly cased.
+		if ( File.Exists( path ) || Directory.Exists( path ) )
+		{
+			//Log.Info( $"[Linux CIPhys] ResolvePathCasing exists-fastpath {path}" );
+			return path;
+		}
 
 		var components = path.Split( '/', StringSplitOptions.RemoveEmptyEntries );
 		var resolvedDir = "/";
@@ -45,14 +49,17 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 		{
 			var entries = GetDirectoryEntries( resolvedDir );
 			if ( entries is null || !entries.TryGetValue( components[i], out var realName ) )
+			{
+				//Log.Info( $"[Linux CIPhys] ResolvePathCasing unresolved at component '{components[i]}' under '{resolvedDir}' for {path}" );
 				return path;
+			}
 
 			resolvedDir = resolvedDir == "/"
 				? $"/{realName}"
 				: $"{resolvedDir}/{realName}";
 		}
 
-		_resolvedPathCache.TryAdd( path, resolvedDir );
+		//Log.Info( $"[Linux CIPhys] ResolvePathCasing resolved {path} -> {resolvedDir}" );
 		return resolvedDir;
 	}
 
@@ -67,7 +74,10 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 			return entries;
 
 		if ( !Directory.Exists( directory ) )
+		{
+			//Log.Info( $"[Linux CIPhys] GetDirectoryEntries miss (does-not-exist) {directory}" );
 			return null;
+		}
 
 		try
 		{
@@ -78,10 +88,12 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 				lookup.TryAdd( info.Name, info.Name );
 
 			_directoryCache.TryAdd( directory, lookup );
+			//Log.Info( $"[Linux CIPhys] GetDirectoryEntries scanned {directory} ({infos.Length} entries)" );
 			return lookup;
 		}
-		catch
+		catch ( Exception ex )
 		{
+			Log.Warning( $"[Linux CIPhys] GetDirectoryEntries exception for {directory}: {ex.Message}" );
 			return null;
 		}
 	}
@@ -96,21 +108,6 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 
 		if ( parent is not null )
 			_directoryCache.TryRemove( parent, out _ );
-
-		InvalidateResolvedPaths( parent ?? resolvedPath );
-	}
-
-	/// <summary>
-	/// Remove resolved-path cache entries whose resolved value passes through
-	/// <paramref name="directoryPrefix"/>.
-	/// </summary>
-	private void InvalidateResolvedPaths( string directoryPrefix )
-	{
-		foreach ( var kvp in _resolvedPathCache )
-		{
-			if ( kvp.Value.StartsWith( directoryPrefix, StringComparison.Ordinal ) )
-				_resolvedPathCache.TryRemove( kvp.Key, out _ );
-		}
 	}
 
 	protected override void CreateDirectoryImpl( UPath path )
@@ -127,6 +124,18 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 		base.DeleteDirectoryImpl( path, isRecursive );
 		InvalidateParent( resolved );
 		_directoryCache.TryRemove( resolved, out _ );
+
+		// Recursive delete also wipes every subdirectory under `resolved`. Drop their
+		// cached listings so we don't return entries for paths that no longer exist.
+		if ( isRecursive )
+		{
+			var prefix = resolved + "/";
+			foreach ( var key in _directoryCache.Keys )
+			{
+				if ( key.StartsWith( prefix, StringComparison.Ordinal ) )
+					_directoryCache.TryRemove( key, out _ );
+			}
+		}
 	}
 
 	protected override void DeleteFileImpl( UPath path )
@@ -175,6 +184,5 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	internal void InvalidateCache()
 	{
 		_directoryCache.Clear();
-		_resolvedPathCache.Clear();
 	}
 }

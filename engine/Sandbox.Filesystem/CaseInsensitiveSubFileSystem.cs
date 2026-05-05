@@ -16,6 +16,8 @@ internal sealed class CaseInsensitiveSubFileSystem : SubFileSystem
 
 	protected override UPath ConvertPathFromDelegate( UPath path )
 	{
+		// almost identical to the base method, but
+
 		// compares first path string of sub fs path
 		// to partial path in physical fs
 
@@ -24,18 +26,19 @@ internal sealed class CaseInsensitiveSubFileSystem : SubFileSystem
 		// it varies very often
 
 		// i.e. disk is /menu/code/AvatarEditor/UI/Workshop/WorkshopPackageList.razor.scss but got /menu/Code
-
+		//Log.Info($"{path.FullName}");
 		var fullPath = path.FullName;
 		var sub = SubPath.FullName;
 
 		if ( !fullPath.StartsWith( sub, StringComparison.OrdinalIgnoreCase )
-			|| (fullPath.Length > sub.Length && fullPath[sub.Length] != UPath.DirectorySeparator) )
+			|| (fullPath.Length > sub.Length && fullPath[sub.Length] != UPath.DirectorySeparator) ) // if the sub path at least equals the full path
 		{
 			throw new InvalidOperationException( $"The path `{path}` returned by the delegate filesystem is not rooted to the subpath `{SubPath}`" );
 		}
 
-		//Log.Info($"[Linux SFS] {fullPath} : {sub}");
 		var remainder = fullPath.Substring( sub.Length );
-		return remainder.Length == 0 ? UPath.Root : new UPath( remainder );
+		var result = remainder.Length == 0 ? UPath.Root : new UPath( remainder );
+		//Log.Info( $"[Linux SFS] ConvertPathFromDelegate sub='{sub}' full='{fullPath}' -> '{result}'" );
+		return result;
 	}
 }

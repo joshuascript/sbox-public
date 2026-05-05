@@ -14,10 +14,6 @@ public static class PlatformFileSystem
 	private static DirectoryInfo _rootDirectory;
 	private static LocalFileSystem _fileSystem;
 
-	private static readonly StringComparison _pathComparison = OperatingSystem.IsLinux()
-		? StringComparison.OrdinalIgnoreCase
-		: StringComparison.Ordinal;
-
 	/// <summary>
 	/// The on-disk root that <see cref="FileSystem"/> resolves paths against.
 	/// Assigning a new value rebuilds <see cref="FileSystem"/> and disposes the
@@ -55,11 +51,14 @@ public static class PlatformFileSystem
 	{
 		var combined = System.IO.Path.Combine( parts );
 
+		if ( ! OperatingSystem.IsLinux () )
+			return combined;
+
 		if ( _fileSystem is null || _rootDirectory is null )
 			return combined;
 
 		var root = _rootDirectory.FullName;
-		if ( !combined.StartsWith( root, _pathComparison ) )
+		if ( !combined.StartsWith( root, StringComparison.OrdinalIgnoreCase ) )
 			return combined;
 
 		var relative = combined.Substring( root.Length );

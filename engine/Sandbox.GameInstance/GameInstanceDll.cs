@@ -861,7 +861,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 			var project = Project.AddFromFile( gameIdent );
 
-			NativeEngine.FullFileSystem.AddProjectPath( gameIdent, project.GetAssetsPath().ToLowerInvariant() );
+			NativeEngine.FullFileSystem.AddProjectPath( gameIdent, project.GetAssetsPath() );
 
 			var libraries = Path.Combine( project.RootDirectory.FullName, "Libraries" );
 
