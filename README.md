@@ -10,41 +10,62 @@
 [Documentation]: https://sbox.game/dev/doc/
 [Contributing]: CONTRIBUTING.md
 
-# s&box
+# s&box — Linux Native Fork
 
-s&box is a modern game engine, built on Valve's Source 2 and the latest .NET technology, it provides a modern intuitive editor for creating games.
+This is a fork of [Facepunch/sbox-public](https://github.com/Facepunch/sbox-public) focused on running s&box natively on Linux without Proton.
 
 ![s&box editor](https://files.facepunch.com/matt/1b2211b1/sbox-dev_FoZ5NNZQTi.jpg)
 
-If your goal is to create games using s&box, please start with the [getting started guide](https://sbox.game/dev/doc/about/getting-started/first-steps/).
-This repository is for building the engine from source for those who want to contribute to the development of the engine.
+## How This Fork Works
 
-## Getting the Engine
+The s&box engine was built for Windows and relies on a case-insensitive filesystem, Windows-native input handling, and native Win32 APIs throughout its C++ layer. Running it on Linux requires patches at multiple levels:
 
-### Steam
+- **Managed C# patches** — changes to the engine's C# layer to handle Linux display servers (X11, XWayland, Wayland), input routing via SDL3, and case-insensitive path resolution through the virtual filesystem
+- **Native patches (via [Anvil](https://github.com/joshuascript/anvil))** — C shims preloaded at launch via `LD_PRELOAD` that intercept filesystem calls and patch native engine crashes in `libengine2.so` and `librendersystemvulkan.so`
 
-You can download and install the s&box editor directly from [Steam](https://sbox.game/give-me-that).
+The managed changes live in this repository. The native patches are managed separately by the [Anvil Project](https://github.com/joshuascript/anvil).
 
-### Compiling from Source
+## Anvil — Required
 
-If you want to build from source, this repository includes all the necessary files to compile the engine yourself.
+**[Anvil](https://github.com/joshuascript/anvil) is required to run this fork.** It provides the native patch layer that the engine cannot function without on Linux.
 
-#### Prerequisites
+Anvil is installed and kept up to date automatically by the Linux bootstrap script.
 
-* [Git](https://git-scm.com/install/windows)
-* [Visual Studio 2026](https://visualstudio.microsoft.com/)
-* [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download)
+## Getting Started on Linux
 
-#### Building
+### Prerequisites
+
+- [Git](https://git-scm.com/)
+- [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download)
+- `gcc` (for compiling native patches)
+- `python3` (for crash analysis tools)
+
+### Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/Facepunch/sbox-public.git
+git clone https://github.com/joshuascript/sbox-public.git
+cd sbox-public
+
+# Run the Linux bootstrap — installs Anvil and builds managed artifacts
+bash bootstrap
 ```
 
-Once you've cloned the repo simply run `Bootstrap.bat` which will download dependencies and build the engine.
+The bootstrap will automatically clone Anvil, compile the native patches, and walk you through building the managed engine artifacts.
 
-The game and editor can be run from the binaries in the game folder.
+### Launching
+
+Always use the Anvil launch scripts — do not run the `sbox` binary directly.
+
+```bash
+# Normal launch
+bash anvil/launch/launch-sbox.sh
+
+# Launch with automated crash capture (GDB)
+bash anvil/launch/launch-sbox-gdb.sh
+```
+
+Crash traces are written to `logs/gdb/` as numbered files per session.
 
 ## Contributing
 
