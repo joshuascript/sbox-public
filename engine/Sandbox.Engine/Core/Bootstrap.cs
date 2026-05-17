@@ -53,6 +53,9 @@ internal static class Bootstrap
 			Logging.OnException = ErrorReporter.ReportException;
 			Logging.PrintToConsole = Application.IsHeadless;
 
+			if ( OperatingSystem.IsLinux() )
+				LinuxDisplay.Detect();
+
 			{
 				using var timerFs = StartupTiming?.ScopeTimer( "FilesystemInit" );
 
@@ -188,6 +191,9 @@ internal static class Bootstrap
 			VRSystem.Init();
 
 			Screen.UpdateFromEngine();
+
+			if ( OperatingSystem.IsLinux() && !Application.IsHeadless )
+				LinuxDisplay.RegisterInputWindow();
 
 			if ( !Application.IsHeadless && !Application.IsStandalone )
 			{

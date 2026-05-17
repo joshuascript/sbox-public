@@ -178,7 +178,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Code folder of the project.
 	/// </summary>
-	public string GetCodePath() => System.IO.Path.Combine( RootDirectory.FullName, "Code" );
+	public string GetCodePath() => ResolveSubDirectory( RootDirectory.FullName, "Code" );
 
 	/// <summary>
 	/// Returns true if the Code path exists
@@ -188,7 +188,7 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Editor folder of the project.
 	/// </summary>
-	public string GetEditorPath() => System.IO.Path.Combine( RootDirectory.FullName, "Editor" );
+	public string GetEditorPath() => ResolveSubDirectory( RootDirectory.FullName, "Editor" );
 
 	/// <summary>
 	/// Returns true if the Editor path exists
@@ -198,13 +198,37 @@ public sealed partial class Project
 	/// <summary>
 	/// Absolute path to the Assets folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
-	public string GetAssetsPath() => System.IO.Path.Combine( RootDirectory.FullName, "Assets" );
+	public string GetAssetsPath() => ResolveSubDirectory( RootDirectory.FullName, "Assets" );
 
 	/// <summary>
 	/// Absolute path to the Localization folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
 	/// <returns></returns>
-	public string GetLocalizationPath() => System.IO.Path.Combine( RootDirectory.FullName, "Localization" );
+	public string GetLocalizationPath() => ResolveSubDirectory( RootDirectory.FullName, "Localization" );
+
+	/// <summary>
+	/// On Linux, enumerates <paramref name="root"/> to find the real on-disk casing of
+	/// <paramref name="name"/>. Falls back to a straight combine on other platforms or when
+	/// the directory isn't found, so Has*Path() still returns false for directories that
+	/// genuinely don't exist.
+	/// </summary>
+	private static string ResolveSubDirectory( string root, string name )
+	{
+		if ( OperatingSystem.IsLinux() )
+		{
+			try
+			{
+				foreach ( var dir in System.IO.Directory.GetDirectories( root ) )
+				{
+					if ( string.Equals( System.IO.Path.GetFileName( dir ), name, StringComparison.OrdinalIgnoreCase ) )
+						return dir;
+				}
+			}
+			catch { }
+		}
+
+		return System.IO.Path.Combine( root, name );
+	}
 
 	/// <summary>
 	/// Returns true if the Assets path exists

@@ -90,8 +90,23 @@ internal static partial class InputRouter
 		}
 	}
 
+	static bool _platformWindowRegistered = false;
+
+	static void TryRegisterPlatWindow()
+	{
+		if ( _platformWindowRegistered ) return;
+
+		var osHandle = SDL.FindGameWindow();
+		if ( osHandle == IntPtr.Zero ) return;
+
+		LinuxDisplay.RegisterInputWindow();
+		_platformWindowRegistered = true;
+	}
+
 	public static void Frame()
 	{
+		if ( OperatingSystem.IsLinux() )
+			TryRegisterPlatWindow();
 		var activeMouse = Contexts.Where( x => x.MouseState != InputContext.InputState.Ignore ).FirstOrDefault();
 		var activeKeyboard = Contexts.Where( x => x.KeyboardState != InputContext.InputState.Ignore ).FirstOrDefault();
 
@@ -112,10 +127,12 @@ internal static partial class InputRouter
 			}
 
 			NativeEngine.InputSystem.SetRelativeMouseMode( true );
+			SDL.SetMouseGrab( true );
 		}
 		else
 		{
 			NativeEngine.InputSystem.SetRelativeMouseMode( false );
+			SDL.SetMouseGrab( false );
 
 			// restore cursor position
 			if ( mouseCapturePosition is not null )
@@ -138,10 +155,12 @@ internal static partial class InputRouter
 		if ( KeyboardFocusPanel is null )
 		{
 			NativeEngine.InputSystem.SetIMEAllowed( false );
+			SDL.SetTextInput( false );
 		}
 		else
 		{
 			NativeEngine.InputSystem.SetIMEAllowed( true );
+			SDL.SetTextInput( true );
 			var rect = KeyboardFocusPanel.Rect;
 			NativeEngine.InputSystem.SetIMETextLocation( (int)rect.Left, (int)rect.Top, (int)rect.Width, (int)rect.Height );
 		}
