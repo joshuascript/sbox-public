@@ -18,7 +18,7 @@ This is a fork of [Facepunch/sbox-public](https://github.com/Facepunch/sbox-publ
 
 ## How This Fork Works
 
-The s&box engine was built for Windows and relies on a case-insensitive filesystem, Windows-native input handling, and native Win32 APIs throughout its C++ layer. Running it on Linux requires patches at multiple levels:
+The s&box engine was built for Windows and relies on a case-insensitive filesystem, Windows-native input handling, and native Win32 APIs throughout its C++ layer. This version runs on Linux by emulating case-insensitivity for the managed and native-level binaries:
 
 - **Managed C# patches** — changes to the engine's C# layer to handle Linux display servers (X11, XWayland, Wayland), input routing via SDL3, and case-insensitive path resolution through the virtual filesystem
 - **Native patches (via [Anvil](https://github.com/joshuascript/anvil))** — C shims preloaded at launch via `LD_PRELOAD` that intercept filesystem calls and patch native engine crashes in `libengine2.so` and `librendersystemvulkan.so`
@@ -29,7 +29,7 @@ The managed changes live in this repository. The native patches are managed sepa
 
 **[Anvil](https://github.com/joshuascript/anvil) is required to run this fork.** It provides the native patch layer that the engine cannot function without on Linux.
 
-Anvil is installed and kept up to date automatically by the Linux bootstrap script.
+Anvil is installed and kept up to date automatically by the Linux bootstrap script. Nothing else is needed.
 
 ## Getting Started on Linux
 
