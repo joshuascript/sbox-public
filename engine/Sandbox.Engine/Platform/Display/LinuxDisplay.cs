@@ -1,4 +1,5 @@
 using NativeEngine;
+using Sandbox;
 
 namespace Sandbox.Engine;
 
@@ -36,7 +37,7 @@ internal static class LinuxDisplay
 	{
 		try
 		{
-			var osHandle = SDL.FindGameWindow();
+			var osHandle = DisplaySurface.FindGameWindow();
 			if ( osHandle == IntPtr.Zero )
 			{
 				Log.Warning( "[Linux] Window handle not available yet — input may not work." );

@@ -99,6 +99,11 @@ public sealed partial class Project
 	[JsonIgnore]
 	internal MemoryFileSystem AssemblyFileSystem { get; }
 
+	/// <summary>
+	/// Filesystem rooted at RootDirectory — provides case-insensitive path resolution on Linux.
+	/// </summary>
+	internal LocalFileSystem RootFileSystem { get; private set; }
+
 	public Project()
 	{
 		AssemblyFileSystem = new MemoryFileSystem();
@@ -113,6 +118,9 @@ public sealed partial class Project
 		EditorCompiler = null;
 
 		AssemblyFileSystem?.Dispose();
+
+		RootFileSystem?.Dispose();
+		RootFileSystem = null;
 	}
 
 	internal bool LoadMinimal()
@@ -124,6 +132,9 @@ public sealed partial class Project
 		{
 			RootDirectory = new DirectoryInfo( System.IO.Path.GetDirectoryName( ConfigFilePath ) );
 			Assert.True( RootDirectory.Exists, $"{RootDirectory} does not exist" );
+
+			RootFileSystem?.Dispose();
+			RootFileSystem = new LocalFileSystem( RootDirectory.FullName );
 
 			if ( !ConfigFilePath.EndsWith( ".sbproj" ) )
 			{
@@ -172,68 +183,46 @@ public sealed partial class Project
 	/// <summary>
 	/// Gets the .sbproj file for this project
 	/// </summary>
-	/// <returns></returns>
-	public string GetProjectPath() => System.IO.Directory.EnumerateFiles( GetRootPath(), "*.sbproj" ).FirstOrDefault();
+	public string GetProjectPath()
+	{
+		var rel = RootFileSystem?.FindFile( "/", "*.sbproj" ).FirstOrDefault();
+		return rel is null ? null : RootFileSystem.GetFullPath( rel );
+	}
 
 	/// <summary>
 	/// Absolute path to the Code folder of the project.
 	/// </summary>
-	public string GetCodePath() => ResolveSubDirectory( RootDirectory.FullName, "Code" );
+	public string GetCodePath() => RootFileSystem?.GetFullPath( "Code" );
 
 	/// <summary>
 	/// Returns true if the Code path exists
 	/// </summary>
-	public bool HasCodePath() => RootDirectory is not null && System.IO.Directory.Exists( GetCodePath() );
+	public bool HasCodePath() => RootFileSystem?.DirectoryExists( "Code" ) ?? false;
 
 	/// <summary>
 	/// Absolute path to the Editor folder of the project.
 	/// </summary>
-	public string GetEditorPath() => ResolveSubDirectory( RootDirectory.FullName, "Editor" );
+	public string GetEditorPath() => RootFileSystem?.GetFullPath( "Editor" );
 
 	/// <summary>
 	/// Returns true if the Editor path exists
 	/// </summary>
-	public bool HasEditorPath() => RootDirectory is not null && System.IO.Directory.Exists( GetEditorPath() );
+	public bool HasEditorPath() => RootFileSystem?.DirectoryExists( "Editor" ) ?? false;
 
 	/// <summary>
 	/// Absolute path to the Assets folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
-	public string GetAssetsPath() => ResolveSubDirectory( RootDirectory.FullName, "Assets" );
+	public string GetAssetsPath() => RootFileSystem?.GetFullPath( "Assets" );
 
 	/// <summary>
 	/// Absolute path to the Localization folder of the project, or <see langword="null"/> if not set.
 	/// </summary>
-	/// <returns></returns>
-	public string GetLocalizationPath() => ResolveSubDirectory( RootDirectory.FullName, "Localization" );
-
-	/// <summary>
-	/// On Linux, enumerates <paramref name="root"/> to find the real on-disk casing of
-	/// <paramref name="name"/>. Falls back to a straight combine on other platforms or when
-	/// the directory isn't found, so Has*Path() still returns false for directories that
-	/// genuinely don't exist.
-	/// </summary>
-	private static string ResolveSubDirectory( string root, string name )
-	{
-		if ( OperatingSystem.IsLinux() )
-		{
-			try
-			{
-				foreach ( var dir in System.IO.Directory.GetDirectories( root ) )
-				{
-					if ( string.Equals( System.IO.Path.GetFileName( dir ), name, StringComparison.OrdinalIgnoreCase ) )
-						return dir;
-				}
-			}
-			catch { }
-		}
-
-		return System.IO.Path.Combine( root, name );
-	}
+	public string GetLocalizationPath() => RootFileSystem?.GetFullPath( "Localization" );
 
 	/// <summary>
 	/// Returns true if the Assets path exists
 	/// </summary>
-	public bool HasAssetsPath() => RootDirectory is not null && System.IO.Directory.Exists( GetAssetsPath() );
+	public bool HasAssetsPath() => RootFileSystem?.DirectoryExists( "Assets" ) ?? false;
 
 	internal void Save()
 	{

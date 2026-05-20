@@ -9,7 +9,7 @@ if [ ! -d "$ANVIL_DIR/.git" ]; then
     echo "Anvil not found — cloning..."
     git clone -q "$ANVIL_REPO" "$ANVIL_DIR"
     echo ""
-    python3 "$ANVIL_DIR/tools/render_readme.py" "$ANVIL_DIR/README.md"
+    python3 "$ANVIL_DIR/.anvil/render_readme.py" "$ANVIL_DIR/README.md"
     echo ""
 else
     echo "Validating Anvil..."
@@ -24,7 +24,7 @@ else
     fi
     echo ""
     echo "Anvil is ready."
-    echo "  First run patch engine : bash anvil/patch_engine.sh"
+    echo "  First run patch engine : bash anvil/launch/patch_engine.sh"
     echo "  To launch sbox, use : bash anvil/launch/launch-sbox.sh"
     echo ""
     echo "  Do not use the standard sbox executable in the game directory."
