@@ -2077,7 +2077,7 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_NeedsPaint_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
@@ -2100,13 +2100,16 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_StartRequest_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchURL; // pchURL const char *
-		internal string PchTarget; // pchTarget const char *
-		internal string PchPostData; // pchPostData const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
+		internal ulong PchTarget_Ptr; // pchTarget const char *
+		internal string PchTarget => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchTarget_Ptr );
+		internal ulong PchPostData_Ptr; // pchPostData const char *
+		internal string PchPostData => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchPostData_Ptr );
 		[MarshalAs( UnmanagedType.I1 )]
 		internal bool BIsRedirect; // bIsRedirect bool
 
@@ -2129,15 +2132,18 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_URLChanged_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchURL; // pchURL const char *
-		internal string PchPostData; // pchPostData const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
+		internal ulong PchPostData_Ptr; // pchPostData const char *
+		internal string PchPostData => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchPostData_Ptr );
 		[MarshalAs( UnmanagedType.I1 )]
 		internal bool BIsRedirect; // bIsRedirect bool
-		internal string PchPageTitle; // pchPageTitle const char *
+		internal ulong PchPageTitle_Ptr; // pchPageTitle const char *
+		internal string PchPageTitle => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchPageTitle_Ptr );
 		[MarshalAs( UnmanagedType.I1 )]
 		internal bool BNewNavigation; // bNewNavigation bool
 
@@ -2148,12 +2154,14 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_FinishedRequest_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchURL; // pchURL const char *
-		internal string PchPageTitle; // pchPageTitle const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
+		internal ulong PchPageTitle_Ptr; // pchPageTitle const char *
+		internal string PchPageTitle => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchPageTitle_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_FinishedRequest_t ) );
@@ -2162,11 +2170,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_OpenLinkInNewTab_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchURL; // pchURL const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_OpenLinkInNewTab_t ) );
@@ -2175,11 +2184,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_ChangedTitle_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchTitle; // pchTitle const char *
+		internal ulong PchTitle_Ptr; // pchTitle const char *
+		internal string PchTitle => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchTitle_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_ChangedTitle_t ) );
@@ -2254,13 +2264,14 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_LinkAtPosition_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
 		internal uint X; // x uint32
 		internal uint Y; // y uint32
-		internal string PchURL; // pchURL const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
 		[MarshalAs( UnmanagedType.I1 )]
 		internal bool BInput; // bInput bool
 		[MarshalAs( UnmanagedType.I1 )]
@@ -2273,11 +2284,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_JSAlert_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchMessage; // pchMessage const char *
+		internal ulong PchMessage_Ptr; // pchMessage const char *
+		internal string PchMessage => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchMessage_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_JSAlert_t ) );
@@ -2286,11 +2298,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_JSConfirm_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchMessage; // pchMessage const char *
+		internal ulong PchMessage_Ptr; // pchMessage const char *
+		internal string PchMessage => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchMessage_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_JSConfirm_t ) );
@@ -2299,12 +2312,14 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_FileOpenDialog_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchTitle; // pchTitle const char *
-		internal string PchInitialFile; // pchInitialFile const char *
+		internal ulong PchTitle_Ptr; // pchTitle const char *
+		internal string PchTitle => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchTitle_Ptr );
+		internal ulong PchInitialFile_Ptr; // pchInitialFile const char *
+		internal string PchInitialFile => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchInitialFile_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_FileOpenDialog_t ) );
@@ -2313,11 +2328,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_NewWindow_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchURL; // pchURL const char *
+		internal ulong PchURL_Ptr; // pchURL const char *
+		internal string PchURL => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchURL_Ptr );
 		internal uint UnX; // unX uint32
 		internal uint UnY; // unY uint32
 		internal uint UnWide; // unWide uint32
@@ -2344,11 +2360,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_StatusText_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchMsg; // pchMsg const char *
+		internal ulong PchMsg_Ptr; // pchMsg const char *
+		internal string PchMsg => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchMsg_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_StatusText_t ) );
@@ -2357,11 +2374,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_ShowToolTip_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchMsg; // pchMsg const char *
+		internal ulong PchMsg_Ptr; // pchMsg const char *
+		internal string PchMsg => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchMsg_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_ShowToolTip_t ) );
@@ -2370,11 +2388,12 @@ namespace Steamworks.Data
 		#endregion
 	}
 
-	[StructLayout( LayoutKind.Sequential, Pack = Platform.StructPlatformPackSize )]
+	[StructLayout( LayoutKind.Sequential, Pack = 4 )]
 	internal struct HTML_UpdateToolTip_t : ICallbackData
 	{
 		internal uint UnBrowserHandle; // unBrowserHandle HHTMLBrowser
-		internal string PchMsg; // pchMsg const char *
+		internal ulong PchMsg_Ptr; // pchMsg const char *
+		internal string PchMsg => System.Runtime.InteropServices.Marshal.PtrToStringAnsi( (IntPtr)(long)PchMsg_Ptr );
 
 		#region SteamCallback
 		internal static int _datasize = System.Runtime.InteropServices.Marshal.SizeOf( typeof( HTML_UpdateToolTip_t ) );
