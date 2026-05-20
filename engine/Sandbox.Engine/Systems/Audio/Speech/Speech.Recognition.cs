@@ -141,6 +141,9 @@ public static class Recognition
 
 	private static RecognizerInfo GetRecognizerInfo()
 	{
+		if ( !OperatingSystem.IsWindows() )
+			return null;
+
 		if ( RecognizerInfo != null )
 			return RecognizerInfo;
 

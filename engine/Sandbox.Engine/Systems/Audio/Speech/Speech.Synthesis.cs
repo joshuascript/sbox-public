@@ -37,8 +37,19 @@ public sealed class Synthesizer : IDisposable
 	/// </summary>
 	public string CurrentVoice => SpeechSynthesizer.Voice.Name;
 
+	/// <summary>
+	/// Whether speech synthesis is supported on the current platform.
+	/// </summary>
+	public static bool IsSupported => OperatingSystem.IsWindows();
+
 	public Synthesizer()
 	{
+		if ( !OperatingSystem.IsWindows() )
+		{
+			GC.SuppressFinalize( this );
+			throw new PlatformNotSupportedException( "Speech synthesis is only supported on Windows." );
+		}
+
 		Builder = new();
 		SpeechSynthesizer = new();
 		SpeechSynthesizer.VisemeReached += new EventHandler<VisemeReachedEventArgs>( ( object obj, VisemeReachedEventArgs e ) => OnVisemeReachedEvent?.Invoke( e.Viseme, e.AudioPosition ) );
@@ -56,7 +67,7 @@ public sealed class Synthesizer : IDisposable
 	{
 		if ( _disposed ) return;
 		_disposed = true;
-		SpeechSynthesizer.Dispose();
+		SpeechSynthesizer?.Dispose();
 		GC.SuppressFinalize( this );
 	}
 
