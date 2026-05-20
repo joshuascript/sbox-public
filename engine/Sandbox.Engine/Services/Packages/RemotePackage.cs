@@ -69,7 +69,7 @@ internal sealed class RemotePackage : Package
 		{
 			Usage = new PackageUsageStats
 			{
-				UsersNow = p.UsageStats.UsersNow,
+				UsersNow = p.UsersNow,
 
 				Total = new PackageUsageStats.Group
 				{
@@ -99,7 +99,6 @@ internal sealed class RemotePackage : Package
 		Favourited = p.Favourited;
 		VotesUp = p.VotesUp;
 		VotesDown = p.VotesDown;
-		Source = p.Source;
 		Public = p.Public;
 		ApiVersion = p.ApiVersion;
 		Screenshots = p.Screenshots?.Select( x => new Screenshot { Created = x.Created, Height = x.Height, IsVideo = x.IsVideo, Thumb = x.Thumb, Url = x.Url, Width = x.Width } ).ToArray() ?? Array.Empty<Screenshot>();
@@ -148,7 +147,7 @@ internal sealed class RemotePackage : Package
 		{
 			Usage = new PackageUsageStats
 			{
-				UsersNow = p.UsageStats.UsersNow,
+				UsersNow = p.UsersNow,
 
 				Total = new PackageUsageStats.Group
 				{

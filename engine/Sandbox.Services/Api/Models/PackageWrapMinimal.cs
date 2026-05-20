@@ -22,6 +22,7 @@ public class PackageWrapMinimal
 	public DateTimeOffset Created { get; set; }
 	public bool Archived { get; set; } = false;
 	public PackageUsageStats UsageStats { get; set; }
+	public long UsersNow { get; set; }
 	public string[] Tags { get; set; }
 	public int Favourited { get; set; }
 	public int Collections { get; set; }

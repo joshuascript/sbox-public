@@ -194,6 +194,7 @@ public partial class Package
 	/// <summary>
 	/// Link to this package's sources, if set.
 	/// </summary>
+	[Obsolete]
 	public string Source { get; set; }
 
 	/// <summary>

@@ -35,9 +35,9 @@ partial class Session
 		if ( parent is null )
 		{
 			availableTracks = Project.RootTracks.OfType<T>();
-			
+
 		}
-		else if( GetTrack( parent ) is { } parentTrack )
+		else if ( GetTrack( parent ) is { } parentTrack )
 		{
 			availableTracks = parentTrack.Children.OfType<T>();
 		}
@@ -129,7 +129,7 @@ partial class Session
 			}
 		}
 
-		var track = (ProjectReferenceTrack<GameObject>)Project.AddReferenceTrack( go.Name, typeof(GameObject), parentTrack );
+		var track = (ProjectReferenceTrack<GameObject>)Project.AddReferenceTrack( go.Name, typeof( GameObject ), parentTrack );
 
 		track.Metadata = new TrackMetadata( go.Id );
 
@@ -287,7 +287,7 @@ partial class Session
 
 			return child is null ? null : GetOrCreateTrack( child );
 		}
-			
+
 		if ( childPreset.PropertyType.IsAssignableTo( typeof( Component ) ) )
 		{
 			var component = rootGameObject.Components.FirstOrDefault( childPreset.PropertyType.IsInstanceOfType );

@@ -1,6 +1,7 @@
 ﻿using Sandbox.Engine;
 using Sandbox.Engine.Settings;
 using Sandbox.Modals;
+using Sandbox.Platform;
 using Sandbox.Services;
 using System;
 using System.Net;
@@ -26,6 +27,16 @@ public static partial class MenuUtility
 	public static void RemoveLogger( Action<LogEvent> logger )
 	{
 		Sandbox.Diagnostics.Logging.OnMessage -= logger;
+	}
+
+	public static void AddChatListener( Action<ChatMessageEvent> listener )
+	{
+		Platform.Chat.OnMessage += listener;
+	}
+
+	public static void RemoveChatListener( Action<ChatMessageEvent> listener )
+	{
+		Platform.Chat.OnMessage -= listener;
 	}
 
 	public static ConCmdAttribute.AutoCompleteResult[] AutoComplete( string text, int maxCount )

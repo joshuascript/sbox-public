@@ -256,8 +256,12 @@ public static partial class Graphics
 		AssertRenderBlock();
 
 		bool withMips = downsampleMethod != DownsampleMethod.None;
-		var fullMips = (int)Math.Log2( Math.Max( Viewport.Width, Viewport.Height ) );
-		var numMips = withMips ? (maxMips > 0 ? Math.Min( maxMips, fullMips ) : fullMips) : 1;
+		var numMips = 1;
+		if ( withMips )
+		{
+			var fullMips = (int)Math.Log2( Math.Max( Viewport.Width, Viewport.Height ) );
+			numMips = maxMips > 0 ? Math.Min( maxMips, fullMips ) : fullMips;
+		}
 
 		// Grab a new one - which may very well be the one we just returned
 		var frameTexture = RenderTarget.GetTemporary( 1, ImageFormat.Default, ImageFormat.None, msaa: MultisampleAmount.MultisampleNone, numMips: numMips, targetName );

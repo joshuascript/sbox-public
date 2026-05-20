@@ -69,11 +69,11 @@ public partial class Panel
 	[Hide]
 	internal bool HasBackdropFilter { get; private set; }
 
-	/// <summary>
-	/// The computed style has a non-default filter property
-	/// </summary>
 	[Hide]
 	internal bool HasFilter { get; private set; }
+
+	[Hide]
+	internal bool HasCustomDraw => CachedDescriptors?.CustomEntries.Count > 0;
 
 	/// <summary>
 	/// The computed style has a renderable background

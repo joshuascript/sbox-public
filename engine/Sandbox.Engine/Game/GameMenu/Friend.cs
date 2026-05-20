@@ -54,6 +54,11 @@ public partial struct Friend : IEquatable<Friend>
 	public readonly bool IsFriend => Internal.IsFriend;
 
 	/// <summary>
+	/// Returns true if you have blocked/ignored this user
+	/// </summary>
+	public readonly bool IsBlocked => Internal.IsBlocked;
+
+	/// <summary>
 	/// Returns true if your friend is away
 	/// </summary>
 	public readonly bool IsAway => Internal.IsAway;

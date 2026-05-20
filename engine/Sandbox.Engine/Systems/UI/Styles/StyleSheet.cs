@@ -96,7 +96,10 @@ public class StyleSheet
 			var text = ctx.FileMount.ReadAllText( name );
 			if ( text is null ) throw new System.IO.FileNotFoundException( "File not found", name );
 
-			return UpdateFromString( text, name, failSilently );
+			using ( new GlobalContext.GlobalContextScope( ctx ) )
+			{
+				return UpdateFromString( text, name, failSilently );
+			}
 		}
 		catch ( Exception e )
 		{

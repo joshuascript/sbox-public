@@ -107,7 +107,7 @@ public class ScrubBar : BackgroundItem, ISnapSource, IMovieItem
 
 	protected override void OnMouseReleased( GraphicsMouseEvent e )
 	{
-		base.OnMouseReleased(e);
+		base.OnMouseReleased( e );
 
 		StopScrubbing();
 	}
