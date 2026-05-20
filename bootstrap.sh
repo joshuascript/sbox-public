@@ -25,7 +25,7 @@ else
     echo ""
     echo "Anvil is ready."
     echo "  First run patch engine : bash anvil/launch/patch_engine.sh"
-    echo "  To launch sbox, use : bash anvil/launch/launch-sbox.sh"
+    echo "  To launch sbox, use : bash anvil/launch/sbox/launch-sbox.sh"
     echo ""
     echo "  Do not use the standard sbox executable in the game directory."
     echo ""
