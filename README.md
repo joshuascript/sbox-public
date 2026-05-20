@@ -58,7 +58,7 @@ The bootstrap will automatically clone Anvil, compile the native patches, and wa
 Before launching for the first time, compile the native patches:
 
 ```bash
-bash anvil/patch_engine.sh
+bash anvil/launch/patch_engine.sh
 ```
 
 Then use the Anvil launch scripts — do not run the `sbox` binary directly.
