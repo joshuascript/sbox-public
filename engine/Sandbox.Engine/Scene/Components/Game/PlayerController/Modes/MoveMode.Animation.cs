@@ -36,6 +36,13 @@ partial class MoveMode
 		var vel = Controller.Velocity;
 		var wishVel = Controller.WishVelocity;
 
+		if ( vel.IsNaN ) vel = Vector3.Zero;
+		if ( wishVel.IsNaN ) wishVel = Vector3.Zero;
+
+		if ( smoothedMove.Current.IsNaN || smoothedMove.Velocity.IsNaN ) smoothedMove = new Vector3.SmoothDamped( 0, 0, 0.5f );
+		if ( smoothedWish.Current.IsNaN || smoothedWish.Velocity.IsNaN ) smoothedWish = new Vector3.SmoothDamped( 0, 0, 0.5f );
+		if ( smoothedSkid.Current.IsNaN || smoothedSkid.Velocity.IsNaN ) smoothedSkid = new Vector3.SmoothDamped( 0, 0, 0.5f );
+
 		// skid
 		{
 			var skidAmount = 0.5f; // multiplier for moving skid
@@ -126,6 +133,7 @@ partial class MoveMode
 
 	private static float GetAngle( Vector3 localVelocity )
 	{
+		if ( localVelocity.IsNaN ) return 0f;
 		return MathF.Atan2( localVelocity.y, localVelocity.x ).RadianToDegree().NormalizeDegrees();
 	}
 

@@ -98,17 +98,21 @@ public sealed partial class SkinnedModelRenderer
 	/// </summary>
 	public void SetLookDirection( string name, Vector3 eyeDirectionWorld )
 	{
-		var delta = eyeDirectionWorld * WorldRotation.Inverse;
+		var len = eyeDirectionWorld.Length;
+		if ( !float.IsFinite( len ) || len < 1e-6f ) return;
+		var delta = eyeDirectionWorld.Normal * WorldRotation.Inverse;
 		Set( name, delta );
 	}
 
 	/// <summary>
-	/// Converts value to vector local to this entity's eyepos and passes it to SetAnimVector. 
+	/// Converts value to vector local to this entity's eyepos and passes it to SetAnimVector.
 	/// This also sets {name}_weight to the weight value.
 	/// </summary>
 	public void SetLookDirection( string name, Vector3 eyeDirectionWorld, float weight )
 	{
-		var delta = eyeDirectionWorld * WorldRotation.Inverse;
+		var len = eyeDirectionWorld.Length;
+		if ( !float.IsFinite( len ) || len < 1e-6f ) return;
+		var delta = eyeDirectionWorld.Normal * WorldRotation.Inverse;
 		Set( name, delta );
 		Set( $"{name}_weight", weight );
 	}
