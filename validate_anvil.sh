@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Validates the anvil installation: environment, dependencies, and patch binaries.
 # Called by bootstrap.sh — can also be run standalone from the repo root:
-#   bash anvil/validate_anvil.sh <repo_root>
+#   bash validate_anvil.sh
 set -e
 
-ANVIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${1:-"$(cd "$ANVIL_DIR/.." && pwd)"}"
+REPO_ROOT="${1:-"$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"}"
+ANVIL_DIR="$REPO_ROOT/anvil"
 
 PASS="✅"
 WARN="⚠️ "
