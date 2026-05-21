@@ -132,6 +132,8 @@ public sealed class CitizenAnimationHelper : Component, Component.ExecuteInEdito
 	/// <param name="Velocity"></param>
 	public void WithVelocity( Vector3 Velocity )
 	{
+		if ( Velocity.IsNaN ) return;
+
 		var dir = Velocity;
 		var forward = Target.WorldRotation.Forward.Dot( dir );
 		var sideward = Target.WorldRotation.Right.Dot( dir );
@@ -152,6 +154,8 @@ public sealed class CitizenAnimationHelper : Component, Component.ExecuteInEdito
 	/// <param name="Velocity"></param>
 	public void WithWishVelocity( Vector3 Velocity )
 	{
+		if ( Velocity.IsNaN ) return;
+
 		var dir = Velocity;
 		var forward = Target.WorldRotation.Forward.Dot( dir );
 		var sideward = Target.WorldRotation.Right.Dot( dir );
