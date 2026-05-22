@@ -588,7 +588,7 @@ namespace Sandbox
 			fixed ( int* pSurfaces = surfaces_span )
 			{
 				var anim = CreateAnimationGroup();
-				var bodies = CreatePhysBodyDesc();
+				var bodies = CPhysBodyDescArray.Create( _bodies, _joints );
 				var materialGroups = CreateMaterialGroups();
 
 				var model = MeshGlue.CreateModel(

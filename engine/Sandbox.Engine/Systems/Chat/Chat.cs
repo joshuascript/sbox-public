@@ -50,7 +50,7 @@ public static class Chat
 
 		if ( Networking.IsHost )
 		{
-			OnHostReceive( new ChatMsg { Message = message }, Connection.Local, default );
+			OnHostReceive( new ChatMsg { Message = message }, Connection.Host, Connection.Host.Id );
 			return;
 		}
 

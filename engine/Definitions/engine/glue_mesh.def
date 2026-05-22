@@ -163,4 +163,8 @@ native static class MeshGlue as NativeEngine.MeshGlue
 	CUtlBuffer SerializeMeshBuffers( IModel model, int nMesh );
 	CUtlBuffer SerializeMeshData( IModel model, int nMesh );
 	CUtlBuffer SerializeModelData( IModel model );
+	CUtlBuffer SerializePhysicsData( IModel model );
+	CUtlBuffer SerializePhysicsDataFromAggregate( CPhysAggregateData physData );
+
+	CPhysAggregateData BuildAggregateData( CPhysBodyDescArray pBodies );
 }
