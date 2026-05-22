@@ -178,7 +178,6 @@ internal static class Bootstrap
 			}
 
 			InitEngineConVars();
-			RenderSettings.Instance.Init();
 
 			if ( IToolsDll.Current is not null )
 			{
