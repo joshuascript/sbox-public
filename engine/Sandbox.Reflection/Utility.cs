@@ -216,13 +216,47 @@ internal static class ReflectionUtility
 		return false;
 	}
 
+	private static volatile bool _engineReady;
+	private static readonly System.Collections.Concurrent.ConcurrentQueue<Assembly> _prejitQueue = new();
+
+	/// <summary>
+	/// Called once by Bootstrap.Init() after all engine subsystems have finished initialising.
+	/// Any assemblies queued before this point are drained and started immediately.
+	/// </summary>
+	internal static void SignalEngineReady()
+	{
+		_engineReady = true;
+		DrainPreJITQueue();
+	}
+
+	private static void DrainPreJITQueue()
+	{
+		while ( _prejitQueue.TryDequeue( out var queued ) )
+			StartPreJIT( queued );
+	}
+
 	/// <summary>
 	/// Pre-compile all methods in the assembly on a background thread to reduce the risk of
 	/// on-demand JIT stalls during gameplay. Returns immediately. Cancels automatically
 	/// if the assembly's load context begins unloading, so type references are released
 	/// promptly and don't delay hotloads.
+	/// If the engine has not finished initialising, the assembly is queued and started
+	/// once SignalEngineReady() is called, avoiding races with native hash table init.
 	/// </summary>
 	public static System.Threading.Tasks.Task PreJITAsync( Assembly asm )
+	{
+		if ( !_engineReady )
+		{
+			_prejitQueue.Enqueue( asm );
+			// Double-check: if the signal fired between our check and our enqueue, drain now.
+			if ( _engineReady )
+				DrainPreJITQueue();
+			return System.Threading.Tasks.Task.CompletedTask;
+		}
+		return StartPreJIT( asm );
+	}
+
+	private static System.Threading.Tasks.Task StartPreJIT( Assembly asm )
 	{
 		var logger = Logging.GetLogger( "PreJit" );
 		var alc = System.Runtime.Loader.AssemblyLoadContext.GetLoadContext( asm );
@@ -308,3 +342,4 @@ internal static class ReflectionUtility
 		} );
 	}
 }
+
