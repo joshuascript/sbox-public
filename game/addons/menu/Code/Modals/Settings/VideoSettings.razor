@@ -250,7 +250,7 @@
     {
         VideoMode = "window";
         if (MenuUtility.RenderSettings.Borderless) VideoMode = "borderless";
-        else if (MenuUtility.RenderSettings.Fullscreen) VideoMode = "exclusive";
+        if (MenuUtility.RenderSettings.Fullscreen) VideoMode = "exclusive";
 
         Resolution = $"{MenuUtility.RenderSettings.ResolutionWidth}x{MenuUtility.RenderSettings.ResolutionHeight}";
         VSync = MenuUtility.RenderSettings.VSync;
