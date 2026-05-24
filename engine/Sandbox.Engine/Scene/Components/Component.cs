@@ -469,11 +469,17 @@ public abstract partial class Component : IJsonConvert, IComponentLister, IValid
 	/// </summary>
 	public async void Invoke( float secondsDelay, Action action, CancellationToken ct = default )
 	{
-		await Task.DelaySeconds( secondsDelay );
+		try
+		{
+			await Task.DelaySeconds( secondsDelay, ct );
+		}
+		catch ( OperationCanceledException )
+		{
+			return;
+		}
 
 		if ( !this.IsValid() ) return;
 		if ( !this.Active ) return;
-		if ( ct.IsCancellationRequested ) return;
 
 		action.InvokeWithWarning();
 	}
