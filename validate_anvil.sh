@@ -23,17 +23,7 @@ if command -v python3 &>/dev/null; then
     PY_VER=$(python3 --version 2>&1)
     echo "  $PASS $PY_VER"
 else
-    echo "  $FAIL python3 not found — preload scripts will not work."
-    WARNINGS=$((WARNINGS + 1))
-fi
-
-# GDB
-if command -v gdb &>/dev/null; then
-    GDB_VER=$(gdb --version 2>&1 | head -1)
-    echo "  $PASS $GDB_VER"
-else
-    echo "  $WARN gdb not found — debug launch scripts will not work."
-    echo "        Install with: sudo apt install gdb"
+    echo "  $FAIL python3 not found — patch_engine.sh will not work."
     WARNINGS=$((WARNINGS + 1))
 fi
 
@@ -103,7 +93,7 @@ if [ "$NEEDS_BUILD" -eq 1 ]; then
     echo ""
     read -r -p "  Build patches now? [Y/n] " answer
     if [[ ! "$answer" =~ ^[Nn]$ ]]; then
-        bash "$ANVIL_DIR/launch/patch_engine.sh"
+        bash "$ANVIL_DIR/patch_engine.sh"
     fi
 fi
 
@@ -120,9 +110,8 @@ else
 fi
 
 echo ""
-echo "  Compile patches : bash anvil/launch/patch_engine.sh"
-echo "  Launch sbox     : bash anvil/launch/sbox/launch-sbox.sh"
-echo "  Launch with GDB : bash anvil/launch/sbox/launch-sbox-gdb.sh"
+echo "  Compile patches : bash anvil/patch_engine.sh"
+echo "  Launch sbox     : bash anvil/launch-sbox.sh"
 echo ""
 echo "  Do not use the game/sbox binary directly."
 echo ""

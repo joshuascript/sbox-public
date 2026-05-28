@@ -15,7 +15,7 @@ if [ ! -d "$ANVIL_DIR/.git" ]; then
     echo "Anvil not found — cloning..."
     git clone -q "$ANVIL_REPO" "$ANVIL_DIR"
     echo ""
-    python3 "$ANVIL_DIR/.anvil/render_readme.py" "$ANVIL_DIR/README.md"
+    python3 "$ANVIL_DIR/bootstrap/render_readme.py" "$ANVIL_DIR/README.md"
     echo ""
 else
     echo "Syncing Anvil..."
