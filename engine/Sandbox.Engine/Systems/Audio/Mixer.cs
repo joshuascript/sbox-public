@@ -1,4 +1,5 @@
-﻿using Sandbox.Utility;
+using Sandbox.Utility;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Sandbox.Audio;
@@ -29,31 +30,27 @@ public partial class Mixer
 	/// <summary>
 	/// Per-listener audio buffers mixed into the final output buffer.
 	/// </summary>
-	readonly Dictionary<Listener, MultiChannelBuffer> _outputBuffers = [];
+	readonly Dictionary<Listener, MultiChannelBuffer> _outputBuffers = new( ReferenceEqualityComparer.Instance );
 
 	/// <summary>
-	/// Tracks which listener buffers were used during the current frame.
+	/// Tracks which listener buffers were written to during this mix frame.
 	/// </summary>
-	readonly HashSet<Listener> _usedListeners = [];
+	readonly HashSet<Listener> _usedListeners = new( ReferenceEqualityComparer.Instance );
 
 	/// <summary>
-	/// We don't want to access sound listeners directly, because it might keep changing
-	/// in the other thread. This is a local copy for us to use.
+	/// Snapshot for the current mix frame, set by StartMixing, read by MixVoices/FinishMixing.
 	/// </summary>
-	IReadOnlyList<Listener> _listeners;
+	VoiceFrameSnapshot _snapshot;
 
 	/// <summary>
-	/// Id of listeners that have been removed so we can dispose of their buffers.
-	/// </summary>
-	IReadOnlyList<Listener> _removedListeners;
-
-	/// <summary>
-	/// The current voices playing on this mixer
+	/// The current voice count for this mixer this frame.
 	/// </summary>
 	int _voiceCount;
 
-	/// Reused working list to avoid per-frame LINQ allocations.
-	readonly List<SoundHandle> _sortedVoices = new();
+	/// <summary>
+	/// Reused list for sorting voices by priority. Stores (createdTime, voiceIndex) pairs.
+	/// </summary>
+	readonly List<(float CreatedTime, int Index)> _sortedVoices = new();
 
 	/// <summary>
 	/// Final mixed output buffer containing audio from all listeners.
@@ -190,34 +187,26 @@ public partial class Mixer
 	}
 
 	/// <summary>
-	/// Called at the start of the mixing frame
+	/// Called at the start of the mixing frame. Stores the snapshot and clears per-frame state.
 	/// </summary>
-	internal void StartMixing( IReadOnlyList<Listener> listeners, IReadOnlyList<Listener> removedListeners )
+	internal void StartMixing( VoiceFrameSnapshot snapshot )
 	{
-		_listeners = listeners;
-		_removedListeners = removedListeners;
+		_snapshot = snapshot;
 		_voiceCount = 0;
-		_usedListeners?.Clear();
-
+		_usedListeners.Clear();
 		_outputBuffer.Silence();
 
-		if ( _outputBuffers is not null )
+		// Dispose per-listener buffers for listeners that were removed this frame.
+		foreach ( var removed in snapshot.RemovedListeners )
 		{
-			// Dispose buffers of removed listeners
-			foreach ( var id in _removedListeners )
-			{
-				if ( _outputBuffers.Remove( id, out var buffer ) )
-				{
-					buffer.Dispose();
-				}
-			}
+			if ( _outputBuffers.Remove( removed, out var buf ) ) buf.Dispose();
 		}
 	}
 
 	/// <summary>
-	/// Mix the child mixes
+	/// Recursively mix all child mixers.
 	/// </summary>
-	internal void MixChildren( List<SoundHandle> voices )
+	internal void MixChildren( VoiceFrameSnapshot snapshot )
 	{
 		lock ( Lock )
 		{
@@ -226,58 +215,49 @@ public partial class Mixer
 
 			foreach ( var child in Children )
 			{
-				child.StartMixing( _listeners, _removedListeners );
-				child.MixChildren( voices );
+				child.StartMixing( snapshot );
+				child.MixChildren( snapshot );
 
 				if ( child.ShouldMixVoices() )
-				{
-					child.MixVoices( voices );
-				}
+					child.MixVoices( snapshot );
 
 				child.FinishMixing();
 
-				// add into the main buffer
 				_outputBuffer.MixFrom( child.Output, 1.0f );
 			}
 		}
 	}
 
-	bool ShouldPlay( SoundHandle voice )
+	bool ShouldPlay( in VoiceState vs )
 	{
-		if ( !voice.CanBeMixed() ) return false;
-		if ( !voice.IsTargettingMixer( this ) ) return false;
+		if ( vs.Sampler is null ) return false;
 
-		return true;
+		// vs.TargetMixer == null means "use the default mixer"
+		if ( vs.TargetMixer is null ) return Mixer.Default == this;
+		if ( string.IsNullOrEmpty( Name ) ) return false;
+		return vs.TargetMixer.Name == Name;
 	}
 
 	/// <summary>
-	/// Mix the incoming voices into the mix
+	/// Mix snapshot voices that target this mixer.
+	/// No locks needed, all data comes from the immutable snapshot.
 	/// </summary>
-	internal void MixVoices( List<SoundHandle> voices )
+	internal void MixVoices( VoiceFrameSnapshot snapshot )
 	{
-		// Filter into reusable list and sort newest-first, avoiding LINQ allocations.
 		_sortedVoices.Clear();
-		foreach ( var voice in voices )
+		var voices = CollectionsMarshal.AsSpan( snapshot.Voices );
+		for ( var i = 0; i < voices.Length; i++ )
 		{
-			if ( ShouldPlay( voice ) ) _sortedVoices.Add( voice );
+			if ( ShouldPlay( in voices[i] ) ) _sortedVoices.Add( (voices[i].CreatedTime, i) );
 		}
 
-		_sortedVoices.Sort( SoundHandle.ByCreatedTimeDescending );
+		_sortedVoices.Sort( static ( a, b ) => b.CreatedTime.CompareTo( a.CreatedTime ) );
 
-		// Can't do this in a thread because stream audio hrtf can't handle that
 		var limit = Math.Min( _sortedVoices.Count, _maxVoices );
-		for ( var i = 0; i < limit; i++ )
+		for ( var si = 0; si < limit; si++ )
 		{
-			var voice = _sortedVoices[i];
-			lock ( voice )
-			{
-				// Race condition: sampler may have become null since we filtered
-				if ( !ShouldPlay( voice ) ) continue;
-
-				MixVoice( voice );
-
-				Interlocked.Add( ref _voiceCount, 1 );
-			}
+			MixVoice( snapshot, voices, _sortedVoices[si].Index );
+			Interlocked.Add( ref _voiceCount, 1 );
 		}
 	}
 
@@ -317,7 +297,7 @@ public partial class Mixer
 	}
 
 	/// <summary>
-	/// Mixing is finished. Clean up and finalize
+	/// Mixing is finished. Apply processors, scale by volume, update meter.
 	/// </summary>
 	internal void FinishMixing()
 	{
@@ -325,210 +305,143 @@ public partial class Mixer
 
 		var volume = Volume;
 
-		//
-		// Scale by convar. Todo allow mixers to define convars?
-		//
 		if ( !Application.IsEditor )
 		{
 			if ( string.Equals( Name, "music", StringComparison.OrdinalIgnoreCase ) )
-			{
 				volume *= Preferences.MusicVolume;
-			}
 			else if ( string.Equals( Name, "voice", StringComparison.OrdinalIgnoreCase ) )
-			{
 				volume *= Preferences.VoipVolume;
-			}
 		}
 
 		_outputBuffer.Scale( volume );
 		Meter.Add( _outputBuffer, _voiceCount );
 	}
 
-
 	static Superluminal _mixVoice = new( "Mix Voice", "#4d5e73" );
 	MultiChannelBuffer mixBuffer = new( AudioEngine.ChannelCount );
 
 	/// <summary>
-	/// Mix a single voice
+	/// Mix one voice described by the snapshot. No locks, all inputs come from the snapshot,
+	/// outputs go to snapshot.Voices[voiceIndex].Output* fields.
 	/// </summary>
-	void MixVoice( SoundHandle voice )
+	void MixVoice( VoiceFrameSnapshot snapshot, Span<VoiceState> voices, int voiceIndex )
 	{
 		using var _ = _mixVoice.Start();
-		var volume = voice.Volume;
 
-		if ( voice.IsFadingOut )
-		{
-			volume *= voice.Fadeout.EvaluateDelta( (float)voice.TimeUntilFaded.Fraction );
-		}
+		if ( (uint)voiceIndex >= (uint)voices.Length ) return;
+		ref readonly var vs = ref voices[voiceIndex];
 
-		if ( voice.IsFadingIn )
-		{
-			volume *= voice.Fadein.EvaluateDelta( (float)voice.TimeUntilFadedIn.Fraction );
+		var volume = vs.Volume * vs.FadeVolume;
 
-			if ( voice.TimeUntilFadedIn )
-			{
-				voice.IsFadingIn = false;
-			}
-		}
+		if ( vs.IsFadingIn && vs.FadeInTimer ) voices[voiceIndex].OutputFadeInComplete = true;
 
-		var samples = voice.sampler.GetLastReadSamples();
+		var samples = vs.Sampler.GetLastReadSamples();
 		var buffer = samples.Get( AudioChannel.Left );
 
-		// Store the levels on the sound for use later
-		voice.Amplitude = buffer.LevelMax;
+		voices[voiceIndex].OutputAmplitude = buffer.LevelMax;
 
-		// Process lipsync if it's enabled
-		if ( voice.LipSync is not null && voice.LipSync.Enabled )
+		if ( vs.HasLipSync ) vs.LipSync.ProcessLipSync( buffer );
+
+		if ( vs.Loopback && !AudioEngine.VoiceLoopback ) return;
+
+		var AllModels = CollectionsMarshal.AsSpan( snapshot.AllModels );
+		var allBinaurals = CollectionsMarshal.AsSpan( snapshot.AllBinaurals );
+		var allParams = CollectionsMarshal.AsSpan( snapshot.AllParams );
+
+		for ( var i = 0; i < vs.SourceCount; i++ )
 		{
-			voice.LipSync.ProcessLipSync( buffer );
-		}
+			AcousticModel source;
+			Listener listener;
+			Transform mixTransform;
 
-		// player voice loopback. Don't mix it if we're not in loopback mode
-		if ( voice.Loopback && !AudioEngine.VoiceLoopback )
-		{
-			return;
-		}
-
-		// If voice is local, we don't need to play it at every listener, just once
-		var listenLocal = voice.ListenLocal || voice.Scene is null;
-		var listenerCount = listenLocal ? 1 : _listeners.Count;
-
-		for ( int i = 0; i < listenerCount; i++ )
-		{
-			var listener = Listener.Local;
-			if ( !listenLocal )
+			if ( vs.ListenLocal )
 			{
-				listener = _listeners[i];
-				if ( listener.Scene != voice.Scene )
-					continue;
+				source = AllModels[vs.SourceOffset];
+				listener = Listener.Local;
+				mixTransform = default;
+			}
+			else
+			{
+				var listeners = CollectionsMarshal.AsSpan( snapshot.Listeners );
+				ref readonly var ls = ref listeners[i];
+				if ( ls.Scene != vs.Scene ) continue;
+				source = AllModels[vs.SourceOffset + i];
+				listener = ls.Listener;
+				mixTransform = ls.MixTransform;
 			}
 
-			var source = voice.GetSource( listener );
-			if ( source is null )
-				continue;
+			if ( source is null ) continue;
 
 			if ( !_outputBuffers.TryGetValue( listener, out var targetBuffer ) )
-			{
-				// Allocate a new buffer for this listener.
 				targetBuffer = _outputBuffers[listener] = new MultiChannelBuffer( AudioEngine.ChannelCount );
-			}
 
-			// Track which buffers have been used, these buffers will have processors applied to them.
-			if ( _usedListeners.Add( listener ) )
-			{
-				// First use this mix, silence the buffer.
-				targetBuffer.Silence();
-			}
+			if ( _usedListeners.Add( listener ) ) targetBuffer.Silence();
 
-			//
-			// Upmix because samples could be mono.
-			//
 			mixBuffer.CopyFromUpmix( samples );
-
-			//
-			// Apply any attenuation and occlusion
-			//
-			ApplyDirectMix( source, listener, mixBuffer, volume );
-
-			//
-			// Make it stereo, based on location
-			//
-			ConvertToBinaural( source, listener, voice, mixBuffer );
-
-			//
-			// Mix it into the target buffer
-			//
+			var sourceParams = allParams[vs.SourceOffset + i];
+			ApplyDirectMix( source, listener, mixBuffer, volume, in sourceParams );
+			ConvertToBinaural( allBinaurals[vs.SourceOffset + i], mixTransform, in vs, mixBuffer );
 			targetBuffer.MixFrom( mixBuffer, 1.0f );
 		}
 	}
 
 	MultiChannelBuffer _input;
 
-	void ApplyDirectMix( SteamAudioSource source, Listener listener, MultiChannelBuffer inputoutput, float volume )
+	void EnsureInputBuffer( int channelCount )
+	{
+		if ( _input?.ChannelCount != channelCount )
+		{
+			_input?.Dispose();
+			_input = new MultiChannelBuffer( channelCount );
+		}
+	}
+
+	void ApplyDirectMix( AcousticModel source, Listener listener, MultiChannelBuffer inputoutput, float volume,
+		in AcousticModelParams sourceParams )
 	{
 		if ( source is null )
 			return;
 
-		if ( _input is not null && _input.ChannelCount != inputoutput.ChannelCount )
-		{
-			_input.Dispose();
-			_input = null;
-		}
-
-		_input ??= new MultiChannelBuffer( inputoutput.ChannelCount );
+		EnsureInputBuffer( inputoutput.ChannelCount );
 		_input.CopyFrom( inputoutput );
 
-		source.ApplyDirectMix( listener, _input, inputoutput, Occlusion, volume );
+		source.Apply( listener, _input, inputoutput, Occlusion, volume, in sourceParams );
 	}
 
 	/// <summary>
-	/// This will spatialize the voice based on its location
+	/// Spatialize the voice based on its snapshotted position and spatialization parameters.
 	/// </summary>
-	void ConvertToBinaural( SteamAudioSource source, Listener listener, SoundHandle voice, MultiChannelBuffer inputoutput )
+	void ConvertToBinaural( BinauralEffect binaural, Transform mixTransform, in VoiceState vs, MultiChannelBuffer inputoutput )
 	{
-		if ( source is null )
+		if ( binaural is null )
 			return;
 
-		if ( _input is not null && _input.ChannelCount != inputoutput.ChannelCount )
-		{
-			_input.Dispose();
-			_input = null;
-		}
-
-		_input ??= new MultiChannelBuffer( inputoutput.ChannelCount );
+		EnsureInputBuffer( inputoutput.ChannelCount );
 		_input.CopyFrom( inputoutput );
 
-		bool is2d = voice.ListenLocal;
-
-		if ( is2d )
+		if ( vs.ListenLocal )
 		{
-			// don't play the sound too close to the listener
-			var pos = voice.Position;
-			while ( pos.Length < 0.5f )
-			{
-				pos += new Vector3( 1, 0, 0 );
-			}
+			var pos = vs.Position;
+			while ( pos.Length < 0.5f ) pos += new Vector3( 1, 0, 0 );
 
-			var spacial = 0.1f * Spacializing;
-
-			// 2D sounds use very low spatialization, nearest neighbor is sufficient
-			source.ApplyBinauralMix( pos, spacial, useNearestInterpolation: true, _input, inputoutput );
+			binaural.Apply( pos, 0.1f * Spacializing, useNearestInterpolation: true, _input, inputoutput );
 			return;
 		}
-		else
+
+		var soundDirectionLocal = mixTransform.PointToLocal( vs.Position );
+		var spacial = vs.SpacialBlend * Spacializing;
+
+		var soundDistance = soundDirectionLocal.Length;
+		if ( soundDistance < 32.0f )
 		{
-			var soundDirectionLocal = listener.MixTransform.PointToLocal( voice.Position );
-			var spacial = voice.SpacialBlend * Spacializing;
-
-			// If sounds are really close, we need to fade them to be non spatial
-			// If the sound is right on the listener, we need to offset it a bit because
-			// steam audio will shit itself if it's right in the middle of the head
-			{
-				var soundDistance = soundDirectionLocal.Length;
-
-				if ( soundDistance < 32.0f )
-				{
-					spacial *= soundDistance.Remap( 1.0f, 32.0f, 0, 1.0f );
-
-					if ( soundDistance <= 0.1f )
-					{
-						soundDirectionLocal = new Vector3( 0.1f, 0, 0 );
-					}
-					else
-					{
-						soundDirectionLocal = soundDirectionLocal.Normal * soundDistance;
-					}
-				}
-			}
-
-			// Determine HRTF interpolation mode:
-			// - Voice/speech sounds don't benefit from bilinear interpolation
-			// - Player's own voice (loopback) uses nearest
-			// - Low spatial blend means minimal HRTF effect, nearest is sufficient
-			bool useNearest = voice.IsVoice || voice.Loopback || spacial < 0.5f;
-
-			source.ApplyBinauralMix( soundDirectionLocal, spacial, useNearest, _input, inputoutput );
+			spacial *= soundDistance.Remap( 1.0f, 32.0f, 0, 1.0f );
+			soundDirectionLocal = soundDistance <= 0.1f
+				? new Vector3( 0.1f, 0, 0 )
+				: soundDirectionLocal.Normal * soundDistance;
 		}
+
+		bool useNearest = vs.IsVoice || vs.Loopback || spacial < 0.5f;
+		binaural.Apply( soundDirectionLocal, spacial, useNearest, _input, inputoutput );
 	}
 
 	/// <summary>
@@ -539,3 +452,6 @@ public partial class Mixer
 		SoundHandle.StopAll( fade, this );
 	}
 }
+
+
+

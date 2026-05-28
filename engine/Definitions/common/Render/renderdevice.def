@@ -48,6 +48,23 @@ native accessor g_pRenderDevice
 
 	void DestroySwapChain( SwapChainHandle_t hSwapChain );
 
+	inline string GetGpuStatsSummary()
+	{
+		static thread_local CBufferString str;
+		str.RemoveAll();
+		g_pRenderDevice->AppendStatsSummaryString( &str );
+		return str.String();
+	}
+
+	inline void GetTexturePoolStats( out ulong pPoolUsedBytesOut, out ulong pPoolLimitBytesOut, out ulong pNonEvictableBytesOut )
+	{
+		uint64 used = 0, limit = 0, pinned = 0;
+		g_pRenderDevice->GetTexturePoolStats( &used, &limit, &pinned );
+		*pPoolUsedBytesOut = used;
+		*pPoolLimitBytesOut = limit;
+		*pNonEvictableBytesOut = pinned;
+	}
+
 	bool Present( SwapChainHandle_t chain );
 	void Flush();
 	void ForceFlushGPU( SwapChainHandle_t hSwapChain );

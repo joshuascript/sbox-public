@@ -1,173 +1,237 @@
-﻿using Sandbox.Utility;
+using Sandbox.Utility;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Sandbox.Audio;
 
 /// <summary>
-/// This is a real thread! We need to be very careful about what this accesses, and how.
+/// Bridges the native audio callback and the managed mixing graph.
+/// Main thread calls UpdateGlobals, ApplyWritebacks, QueueSamplerDisposal, QueueAcousticModelDisposal.
+/// Mix thread calls MixOneBuffer from the native audio callback.
 /// </summary>
 static class MixingThread
 {
-	static readonly Superluminal _sampleVoices = new Superluminal( "SampleVoices", "#4d5e73" );
-	static readonly Superluminal _mixVoices = new Superluminal( "Mix", "#4d5e73" );
-	static readonly Superluminal _finishVoices = new Superluminal( "FinishVoices", "#4d5e73" );
+	static readonly Superluminal _sampleVoices = new( "SampleVoices", "#4d5e73" );
+	static readonly Superluminal _mixVoices = new( "Mix", "#4d5e73" );
+	static readonly Superluminal _finishVoices = new( "FinishVoices", "#4d5e73" );
 
+	// Set to 1 by main after publishing; atomically read-and-cleared by mix thread.
+	// int (not volatile) — all accesses go through Interlocked which provides full memory barriers.
+	static int _freshSnapFlag;
+
+	// PackageLoader acquires this during hotload to pause mixing.
 	static readonly Lock _lockObject = new Lock();
-
-	// Samplers queued for disposal between mix frames. Drained at the start of MixOneBuffer,
-	// after the previous frame's Parallel.ForEach has fully completed.
-	static readonly ConcurrentQueue<AudioSampler> _samplerDisposalQueue = new();
-
-	class MixingSettings
-	{
-		public List<Listener> Listeners;
-		public float MasterVolume = 0.1f;
-	}
-
-	static MixingSettings _settings = new MixingSettings();
-
 	internal static Lock LockObject => _lockObject;
 
-	/// <summary>
-	/// Queue an AudioSampler for disposal between mix frames, so the native CAudioMixer
-	/// is never freed while a mixing task still holds a reference to it.
-	/// </summary>
-	internal static void QueueSamplerDisposal( AudioSampler sampler )
-	{
-		if ( sampler is null )
-			return;
+	// Triple-buffer rotation: main writes → ready hand-off → mix reads.
+	// Each slot is always owned by exactly one of: _writableSnap, _readySnap, _activeMixSnap.
+	static readonly VoiceFrameSnapshot _snap0 = new();
+	static readonly VoiceFrameSnapshot _snap1 = new();
+	static readonly VoiceFrameSnapshot _snap2 = new();
 
-		_samplerDisposalQueue.Enqueue( sampler );
+	static VoiceFrameSnapshot _writableSnap = _snap2;
+	static VoiceFrameSnapshot _readySnap = _snap1;
+	static VoiceFrameSnapshot _activeMixSnap = _snap0;
+
+	// _completedSnapshot: decoupled from the rotation so writebacks survive when mix outruns main.
+	static VoiceFrameSnapshot _completedSnapshot = _snap0;
+
+	// Disposals are staged on the main thread then flushed after the new snapshot is published,
+	// ensuring the mix thread never encounters a disposed object mid-mix.
+	static readonly ConcurrentQueue<AudioSampler> _samplerDisposalQueue = new();
+	static readonly ConcurrentQueue<AcousticModel> _acousticModelDisposalQueue = new();
+	static readonly ConcurrentQueue<BinauralEffect> _binauralDisposalQueue = new();
+	static readonly List<AudioSampler> _pendingSamplerDisposals = new();
+	static readonly List<AcousticModel> _pendingAcousticModelDisposals = new();
+	static readonly List<BinauralEffect> _pendingBinauralDisposals = new();
+
+	static readonly List<SoundHandle> _buildVoiceList = new();
+
+	static void FlushPendingDisposals()
+	{
+		foreach ( var s in _pendingSamplerDisposals ) _samplerDisposalQueue.Enqueue( s );
+		foreach ( var s in _pendingAcousticModelDisposals ) _acousticModelDisposalQueue.Enqueue( s );
+		foreach ( var b in _pendingBinauralDisposals ) _binauralDisposalQueue.Enqueue( b );
+		_pendingSamplerDisposals.Clear();
+		_pendingAcousticModelDisposals.Clear();
+		_pendingBinauralDisposals.Clear();
 	}
 
+	internal static void DrainDisposals()
+	{
+		FlushPendingDisposals();
+
+		lock ( _lockObject )
+		{
+			_snap0.Reset();
+			_snap1.Reset();
+			_snap2.Reset();
+			_writableSnap = _snap2;
+			_readySnap = _snap1;
+			_activeMixSnap = _snap0;
+			_freshSnapFlag = 0;
+
+			while ( _samplerDisposalQueue.TryDequeue( out var s ) ) s.Dispose();
+			while ( _acousticModelDisposalQueue.TryDequeue( out var s ) ) s.Dispose();
+			while ( _binauralDisposalQueue.TryDequeue( out var b ) ) b.Dispose();
+		}
+
+		SoundHandle.LipSyncAccessor.DrainDestructionQueue();
+	}
+
+	internal static void QueueSamplerDisposal( AudioSampler sampler )
+	{
+		if ( sampler is not null ) _pendingSamplerDisposals.Add( sampler );
+	}
+
+	internal static void QueueAcousticModelDisposal( AcousticModel source )
+	{
+		if ( source is not null ) _pendingAcousticModelDisposals.Add( source );
+	}
+
+	internal static void QueueBinauralDisposal( BinauralEffect binaural )
+	{
+		if ( binaural is not null ) _pendingBinauralDisposals.Add( binaural );
+	}
+
+	internal static void ApplyWritebacks()
+	{
+		var snapshot = Volatile.Read( ref _completedSnapshot );
+		var writebackCount = snapshot.WritebacksReady;
+		if ( writebackCount == 0 ) return;
+
+		var voices = CollectionsMarshal.AsSpan( snapshot.Voices );
+		for ( var i = 0; i < writebackCount; i++ )
+		{
+			ref readonly var vs = ref voices[i];
+			var handle = vs.Handle;
+			if ( handle is null || !handle.IsValid ) continue;
+
+			handle.Amplitude = vs.OutputAmplitude;
+			if ( vs.OutputFadeInComplete ) handle.IsFadingIn = false;
+			if ( vs.OutputFinished ) handle.Finished = true;
+		}
+	}
+
+	/// <summary>
+	/// Build and publish a new VoiceFrameSnapshot. Must be called after SoundHandle.TickAll().
+	/// </summary>
 	internal static void UpdateGlobals()
 	{
-		var settings = new MixingSettings
+		BuildSnapshot( _writableSnap );
+		_writableSnap = Interlocked.Exchange( ref _readySnap, _writableSnap );
+		Interlocked.Exchange( ref _freshSnapFlag, 1 );
+
+		FlushPendingDisposals();
+	}
+
+	static void BuildSnapshot( VoiceFrameSnapshot snapshot )
+	{
+		snapshot.Reset();
+
+		foreach ( var listener in Listener.ActiveList )
 		{
-			Listeners = new(),
-			MasterVolume = Sound.MasterVolume
-		};
+			listener.MixTransform = listener.Transform;
+			snapshot.Listeners.Add( new ListenerState
+			{
+				Listener = listener,
+				MixTransform = listener.MixTransform,
+				Scene = listener.Scene
+			} );
+		}
 
-		Listener.GetActive( settings.Listeners );
+		snapshot.RemovedListeners.AddRange( Listener.RemovedList );
+		Listener.RemovedList.Clear();
 
-		Interlocked.Exchange( ref _settings, settings );
+		_buildVoiceList.Clear();
+		SoundHandle.GetActive( _buildVoiceList );
+		foreach ( var handle in _buildVoiceList )
+			snapshot.Voices.Add( handle.BuildVoiceState( snapshot ) );
+
+		snapshot.MasterVolume = Sound.MasterVolume;
 	}
 
 	internal static void MixOneBuffer()
 	{
-		// Drain samplers disposed since the last frame.
-		while ( _samplerDisposalQueue.TryDequeue( out var sampler ) )
-		{
-			sampler.Dispose();
-		}
-
 		try
 		{
-			lock ( LockObject )
+			lock ( _lockObject )
 			{
-				Mix();
+				// Reuse the current snapshot until main publishes a new one.
+				if ( Interlocked.Exchange( ref _freshSnapFlag, 0 ) != 0 )
+				{
+					_activeMixSnap.ResetForPool();
+					_activeMixSnap = Interlocked.Exchange( ref _readySnap, _activeMixSnap );
+				}
+
+				Mix( _activeMixSnap );
 			}
 		}
 		catch ( Exception e )
 		{
 			Log.Error( e, $"Sound Mixer Exception: {e.Message}" );
 		}
+
+		// Drain disposal queues after mixing so objects are valid for the duration of the mix.
+		while ( _samplerDisposalQueue.TryDequeue( out var sampler ) ) sampler.Dispose();
+		while ( _acousticModelDisposalQueue.TryDequeue( out var source ) ) source.Dispose();
+		while ( _binauralDisposalQueue.TryDequeue( out var binaural ) ) binaural.Dispose();
+		SoundHandle.LipSyncAccessor.DrainDestructionQueue();
 	}
 
-	private static readonly List<SoundHandle> _voiceCollectList = [];
-	private static readonly List<Listener> _removedListeners = [];
+	static readonly MultiChannelBuffer _mixOutput = new( AudioEngine.ChannelCount );
 
-	private static void Mix()
+	static void Mix( VoiceFrameSnapshot snapshot )
 	{
-		_voiceCollectList.Clear();
-		SoundHandle.GetActive( _voiceCollectList );
-		Mix( _voiceCollectList );
+		SampleVoices( snapshot );
+
+		using ( _mixVoices.Start() )
+		{
+			Mixer.Master.StartMixing( snapshot );
+			Mixer.Master.MixChildren( snapshot );
+			Mixer.Master.MixVoices( snapshot );
+			Mixer.Master.FinishMixing();
+		}
+
+		FinishVoices( snapshot );
+
+		_mixOutput.Silence();
+		_mixOutput.MixFrom( Mixer.Master.Output, snapshot.MasterVolume );
+		_mixOutput.SendToOutput();
 	}
 
-	static float Mix( List<SoundHandle> voices )
+	/// <summary>Decode one buffer of audio from every active sampler (parallelized).</summary>
+	static void SampleVoices( VoiceFrameSnapshot snapshot )
 	{
-		var settings = Volatile.Read( ref _settings );
+		using var _ = _sampleVoices.Start();
 
-		_removedListeners.Clear();
-
-		while ( Listener.RemoveQueue.TryDequeue( out var id ) )
+		System.Threading.Tasks.Parallel.For( 0, snapshot.Voices.Count, i =>
 		{
-			_removedListeners.Add( id );
-		}
-
-		SampleVoices( voices );
-
-		//
-		// At the moment we're running each mixer then copying their contents to output.
-		// What we will have in the future is a sort of dependancy list, because a mixer
-		// might want to send its output to another mixer. For now this is fine.
-		//
-
-		lock ( Mixer.Master.Lock )
-		{
-			using ( _mixVoices.Start() )
-			{
-				// MIX CHILDREN
-
-				Mixer.Master.StartMixing( settings.Listeners, _removedListeners );
-				Mixer.Master.MixChildren( voices );
-				Mixer.Master.MixVoices( voices );
-				Mixer.Master.FinishMixing();
-			}
-		}
-
-		FinishVoices( voices );
-
-		// output
-		{
-			using MultiChannelBuffer buffer = new( AudioEngine.ChannelCount );
-			buffer.Silence();
-
-			buffer.MixFrom( Mixer.Master.Output, settings.MasterVolume );
-
-			buffer.SendToOutput();
-		}
-
-		return 512 * AudioEngine.SecondsPerSample;
-	}
-
-	/// <summary>
-	/// Read one sample from each voice
-	/// </summary>
-	static void SampleVoices( List<SoundHandle> voices )
-	{
-		using var scope = _sampleVoices.Start();
-
-		System.Threading.Tasks.Parallel.ForEach( voices, voice =>
-		{
-			if ( !voice.IsValid ) return;
-			var sampler = voice.sampler;
+			var sampler = snapshot.Voices[i].Sampler;
 			if ( sampler is null ) return;
-			if ( voice.Finished ) return;
-
-			sampler.Sample( voice.Pitch );
+			sampler.Sample( snapshot.Voices[i].Pitch );
 		} );
 	}
 
-	/// <summary>
-	/// Mark any finished voices as finished
-	/// </summary>
-	static void FinishVoices( List<SoundHandle> voices )
+	static void FinishVoices( VoiceFrameSnapshot snapshot )
 	{
-		using var scope = _finishVoices.Start();
+		using var _ = _finishVoices.Start();
 
-		System.Threading.Tasks.Parallel.ForEach( voices, voice =>
+		var voices = CollectionsMarshal.AsSpan( snapshot.Voices );
+		for ( var i = 0; i < voices.Length; i++ )
 		{
-			var sampler = voice.sampler;
-			if ( sampler is null ) return;
-			if ( voice.Finished ) return;
-			if ( sampler.ShouldContinueMixing && !voice.IsFadingOut ) return;
-			if ( voice.TimeUntilFaded == false ) return;
+			ref var v = ref voices[i];
+			if ( v.Sampler is null ) continue;
+			if ( v.Sampler.ShouldContinueMixing && !v.IsFadingOut ) continue;
+			if ( v.FadeOutTimer == false ) continue;
 
-			voice.Finished = true;
-		} );
+			v.OutputFinished = true;
+		}
+
+		// Volatile write acts as a release barrier so Output* writes are visible to the main thread.
+		snapshot.WritebacksReady = snapshot.Voices.Count;
+		Volatile.Write( ref _completedSnapshot, snapshot );
 	}
-
-
 }
+

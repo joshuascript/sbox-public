@@ -6,6 +6,23 @@ namespace Sandbox;
 
 public partial struct PhysicsTraceBuilder
 {
+	sealed class TraceResultVector
+	{
+		public CUtlVectorTraceResult Vec = CUtlVectorTraceResult.Create( 32, 32 );
+		~TraceResultVector() => Vec.DeleteThis();
+	}
+
+	[ThreadStatic] static TraceResultVector _threadTraceVec;
+	static CUtlVectorTraceResult ThreadTraceVec
+	{
+		get
+		{
+			_threadTraceVec ??= new TraceResultVector();
+			_threadTraceVec.Vec.RemoveAll();
+			return _threadTraceVec.Vec;
+		}
+	}
+
 	internal PhysicsWorld targetWorld;
 	internal PhysicsBody targetBody;
 	internal PhysicsTrace.Request request;
@@ -451,7 +468,7 @@ public partial struct PhysicsTraceBuilder
 			_currentfilterCallback = filterCallback;
 		}
 
-		var nativeResults = CUtlVectorTraceResult.Create( 32, 32 );
+		var nativeResults = ThreadTraceVec;
 		PhysicsTrace.TraceAll( r, nativeResults );
 		var count = nativeResults.Count();
 
@@ -463,8 +480,6 @@ public partial struct PhysicsTraceBuilder
 		{
 			results[i] = PhysicsTraceResult.From( nativeResults.Element( i ), request.StartShape );
 		}
-
-		nativeResults.DeleteThis();
 
 		return results;
 	}

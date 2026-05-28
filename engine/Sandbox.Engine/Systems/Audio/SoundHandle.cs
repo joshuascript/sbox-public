@@ -1,5 +1,5 @@
-﻿using Sandbox.Audio;
-using System.Collections.Concurrent;
+using Sandbox.Audio;
+using System.Collections.Generic;
 using System.IO;
 
 namespace Sandbox;
@@ -10,9 +10,7 @@ namespace Sandbox;
 [Expose]
 public partial class SoundHandle : IValid, IDisposable
 {
-	static ConcurrentQueue<SoundHandle> removalQueue = new();
-	static ConcurrentQueue<SoundHandle> addQueue = new();
-	static HashSet<SoundHandle> active = new();
+	static readonly HashSet<SoundHandle> active = new();
 
 	CSfxTable _sfx;
 
@@ -21,17 +19,12 @@ public partial class SoundHandle : IValid, IDisposable
 	int _ticks;
 	Transform _transform = Transform.Zero;
 
-
 	static SoundHandle _empty;
 
 	/// <summary>
 	/// RealTime that this sound was created
 	/// </summary>
 	internal float _CreatedTime;
-
-	/// Sorts by creation time descending; static to avoid per-call allocations.
-	internal static readonly IComparer<SoundHandle> ByCreatedTimeDescending =
-		Comparer<SoundHandle>.Create( static ( x, y ) => y._CreatedTime.CompareTo( x._CreatedTime ) );
 
 	/// <summary>
 	/// An empty, do nothing sound, that we can return to avoid NREs
@@ -212,14 +205,7 @@ public partial class SoundHandle : IValid, IDisposable
 	/// <summary>
 	/// True if the sound has been stopped
 	/// </summary>
-	public bool IsStopped
-	{
-		get
-		{
-			if ( !IsValid ) return true;
-			return false;
-		}
-	}
+	public bool IsStopped => !IsValid;
 
 	[Obsolete( "Use Time instead" )]
 	public float ElapsedTime => Time;
@@ -276,7 +262,7 @@ public partial class SoundHandle : IValid, IDisposable
 	/// </summary>
 	public float Amplitude { get; set; }
 
-	bool _destroyed = false;
+	volatile bool _destroyed;
 
 	/// <summary>
 	/// Weak reference to the scene, so we don't prevent GC of the scene
@@ -291,19 +277,17 @@ public partial class SoundHandle : IValid, IDisposable
 
 	internal SoundHandle( CSfxTable soundHandle )
 	{
+		ThreadSafe.AssertIsMainThread();
+
 		_sfx = soundHandle;
 		_sceneRef = new WeakReference<Scene>( Game.ActiveScene );
 
-		// GetSound() returns a CStrongHandle copy that increments the
-		// native refcount. We must destroy it after reading the sample
-		// rate, otherwise the VSound_t struct falls off the stack and
-		// the native handle is never released.
 		var tempSound = _sfx.GetSound();
 		SampleRate = tempSound.m_rate();
 		tempSound.DestroyStrongHandle();
 
 		TryCreateMixer();
-		addQueue.Enqueue( this );
+		active.Add( this );
 		_CreatedTime = RealTime.Now;
 	}
 
@@ -313,11 +297,6 @@ public partial class SoundHandle : IValid, IDisposable
 		SampleRate = 48000;
 		_destroyed = true;
 		_CreatedTime = RealTime.Now;
-	}
-
-	~SoundHandle()
-	{
-		Dispose();
 	}
 
 	/// <summary>
@@ -352,8 +331,7 @@ public partial class SoundHandle : IValid, IDisposable
 	}
 
 	/// <summary>
-	/// Returns true if this sound is ready to be mixed (has sampler, not finished, valid).
-	/// Used by both mixer and occlusion system to determine if sound should be processed.
+	/// Returns true if this sound is ready to be mixed.
 	/// </summary>
 	internal bool CanBeMixed()
 	{
@@ -387,31 +365,28 @@ public partial class SoundHandle : IValid, IDisposable
 
 	public void Dispose()
 	{
-		lock ( this )
-		{
-			if ( _destroyed )
-				return;
+		if ( _destroyed )
+			return;
 
-			GC.SuppressFinalize( this );
-			_destroyed = true;
+		_destroyed = true;
+		_sfx = default;
 
-			_sfx = default;
+		DisposeSources();
 
-			DisposeSources();
+		Audio.MixingThread.QueueSamplerDisposal( sampler );
+		sampler = null;
 
-			Audio.MixingThread.QueueSamplerDisposal( sampler );
-			sampler = null;
+		active.Remove( this );
 
-			removalQueue.Enqueue( this );
-
-			if ( LipSync.Enabled )
-				LipSync.DisableLipSync();
-		}
+		if ( LipSync.Enabled )
+			LipSync.DisableLipSync();
 	}
 
-	/// <summary>
-	/// This is called on the main thread for all active voices
-	/// </summary>
+	~SoundHandle()
+	{
+		MainThread.QueueDispose( this );
+	}
+
 	void TickInternal()
 	{
 		if ( _destroyed )
@@ -425,13 +400,7 @@ public partial class SoundHandle : IValid, IDisposable
 
 		UpdateFollower();
 		TryCreateMixer();
-
-		// Pairs with lock(voice) in MixVoices, prevents UpdateSources disposing
-		// _audioSource/_audioSources while the audio thread is inside GetSource/ApplyDirectMix.
-		lock ( this )
-		{
-			UpdateSources();
-		}
+		UpdateSources();
 
 		_ticks++;
 	}
@@ -446,174 +415,133 @@ public partial class SoundHandle : IValid, IDisposable
 
 	}
 
-	/// <summary>
-	/// Before we're added to the active list, we need to get some stuff straight
-	/// </summary>
-	void OnActive()
-	{
-
-	}
-
-	static void TickQueues()
-	{
-		while ( addQueue.TryDequeue( out var h ) )
-		{
-			h.OnActive();
-			active.Add( h );
-		}
-
-		while ( removalQueue.TryDequeue( out var h ) )
-		{
-			active.Remove( h );
-		}
-	}
-
-	static void TickVoices()
-	{
-		foreach ( var handle in active )
-		{
-			if ( !handle.IsValid ) continue;
-
-			handle.TickInternal();
-		}
-	}
+	// Reused scratch list to avoid allocations in TickAll/Shutdown.
+	static readonly List<SoundHandle> _tickList = new();
 
 	internal static void TickAll()
 	{
-		lock ( active )
+		Audio.MixingThread.ApplyWritebacks();
+
+		_tickList.Clear();
+		foreach ( var h in active ) _tickList.Add( h );
+
+		foreach ( var handle in _tickList )
 		{
-			TickQueues();
-			TickVoices();
+			if ( !handle.IsValid ) continue;
+			handle.TickInternal();
 		}
 	}
 
 	internal static void StopAll( float fade, Mixer mixer = null )
 	{
-		lock ( active )
+		_tickList.Clear();
+		_tickList.AddRange( active );
+		foreach ( var handle in _tickList )
 		{
-			TickQueues();
-
-			var handles = mixer is null ? active : active.Where( x => x.TargetMixer == mixer );
-			foreach ( var handle in handles )
-			{
-				if ( !handle.IsValid() ) continue;
-				handle.Stop( fade );
-			}
+			if ( mixer is not null && handle.TargetMixer != mixer ) continue;
+			if ( handle.IsValid ) handle.Stop( fade );
 		}
 	}
 
 	internal static void Shutdown()
 	{
-		lock ( active )
+		// Snapshot active so Dispose() can safely remove from the set during iteration.
+		_tickList.Clear();
+		_tickList.AddRange( active );
+		active.Clear();
+
+		foreach ( var handle in _tickList )
 		{
-			// Drain pending additions first — handles created after the
-			// last TickAll() (e.g. UI button sounds on the exit click)
-			// would otherwise never enter `active` and never get disposed.
-			TickQueues();
-
-			foreach ( var handle in active )
-			{
-				if ( !handle.IsValid() ) continue;
-				handle.Dispose();
-			}
-
-			// No more TickQueues() will run after shutdown, so clear
-			// the set directly instead of relying on removalQueue.
-			active.Clear();
+			if ( !handle.IsValid ) continue;
+			handle.Dispose();
 		}
 	}
 
 	internal static void StopAllWithParent( GameObject parent, float fade )
 	{
-		lock ( active )
+		_tickList.Clear();
+		_tickList.AddRange( active );
+		foreach ( var handle in _tickList )
 		{
-			TickQueues();
-
-			foreach ( var handle in active.Where( x => x.Parent == parent ) )
-			{
-				if ( !handle.IsValid() ) continue;
-				handle.Stop( fade );
-			}
+			if ( handle.Parent != parent ) continue;
+			if ( handle.IsValid ) handle.Stop( fade );
 		}
 	}
 
 	internal static void StopAll( CSfxTable sfx )
 	{
-		lock ( active )
+		_tickList.Clear();
+		_tickList.AddRange( active );
+		foreach ( var handle in _tickList )
 		{
-			foreach ( var handle in active.Where( x => x._sfx == sfx ) )
-			{
-				if ( !handle.IsValid() ) continue;
-				handle.Stop();
-			}
-		}
-	}
-
-	internal static void FlushCreatedSounds()
-	{
-		lock ( active )
-		{
-			TickQueues();
+			if ( handle._sfx != sfx ) continue;
+			if ( handle.IsValid ) handle.Stop();
 		}
 	}
 
 	public static void GetActive( List<SoundHandle> handles )
 	{
-		lock ( active )
+		foreach ( var handle in active )
 		{
-			foreach ( var handle in active )
-			{
-				if ( !handle.IsValid() ) continue;
-				if ( handle._ticks == 0 ) continue;
-				if ( handle.Paused ) continue;
+			if ( !handle.IsValid() ) continue;
+			if ( handle._ticks == 0 ) continue;
+			if ( handle.Paused ) continue;
 
-				handles.Add( handle );
-			}
+			handles.Add( handle );
 		}
 	}
 
-	[ConCmd( "list_sound_handles", Help = "Prints a summary of active sound handles to the console. Use \"list_sound_handles 2\" to see more info." )]
-	private static void LogActiveHandles( int level = 1 )
+	internal Audio.VoiceState BuildVoiceState( Audio.VoiceFrameSnapshot snap )
 	{
-		var handles = new List<SoundHandle>();
-		GetActive( handles );
+		var fadeVolume = 1.0f;
+		if ( IsFadingOut ) fadeVolume *= Fadeout.EvaluateDelta( (float)TimeUntilFaded.Fraction );
+		if ( IsFadingIn ) fadeVolume *= Fadein.EvaluateDelta( (float)TimeUntilFadedIn.Fraction );
 
-		using var writer = new StringWriter();
-		var mixerGroups = handles
-			.GroupBy( x => x.TargetMixer )
-			.OrderBy( x => x.Key?.Name );
+		var isLocal = ListenLocal || Scene is null;
+		var sourceOffset = snap.AllModels.Count;
 
-		writer.WriteLine( $"Total active sound handles: {handles.Count}" );
-		writer.WriteLine();
-
-		foreach ( var mixerGroup in mixerGroups )
+		if ( isLocal )
 		{
-			writer.WriteLine( $"Mixer \"{mixerGroup.Key?.Name ?? "Default"}\": {mixerGroup.Count()}" );
-
-			var soundGroups = mixerGroup.GroupBy( x => x.Name );
-
-			foreach ( var soundGroup in soundGroups )
+			snap.AllModels.Add( _acousticModel );
+			snap.AllParams.Add( _acousticModel?.GetParams() ?? default );
+			snap.AllBinaurals.Add( _binauralEffect );
+		}
+		else
+		{
+			for ( var i = 0; i < snap.Listeners.Count; i++ )
 			{
-				writer.WriteLine( $"  Sound \"{soundGroup.Key}\": {soundGroup.Count()}" );
-
-				if ( level < 2 ) continue;
-
-				foreach ( var soundHandle in soundGroup )
-				{
-					writer.WriteLine( $"    Handle {soundHandle._sfx.self:x}:" );
-
-					writer.WriteLine( $"      {nameof( IsPlaying )}: {soundHandle.IsPlaying}" );
-					writer.WriteLine( $"      {nameof( Time )}: {soundHandle.Time}" );
-					writer.WriteLine( $"      {nameof( Volume )}: {soundHandle.Volume}" );
-					writer.WriteLine( $"      {nameof( Distance )}: {soundHandle.Distance}" );
-					writer.WriteLine( $"      {nameof( ListenLocal )}: {soundHandle.ListenLocal}" );
-					writer.WriteLine( $"      {nameof( Position )}: {soundHandle.Position}" );
-				}
+				var listener = snap.Listeners[i].Listener;
+				var src = GetAcousticModel( listener );
+				snap.AllModels.Add( src );
+				snap.AllParams.Add( src?.GetParams() ?? default );
+				snap.AllBinaurals.Add( GetBinaural( listener ) );
 			}
-
-			writer.WriteLine();
 		}
 
-		Log.Info( writer.ToString() );
+		return new Audio.VoiceState
+		{
+			Sampler = sampler,
+			Pitch = Pitch,
+			Volume = Volume,
+			FadeVolume = fadeVolume,
+			IsFadingOut = IsFadingOut,
+			FadeOutTimer = TimeUntilFaded,
+			IsFadingIn = IsFadingIn,
+			FadeInTimer = TimeUntilFadedIn,
+			ListenLocal = isLocal,
+			Loopback = Loopback,
+			IsVoice = IsVoice,
+			SpacialBlend = SpacialBlend,
+			Position = Position,
+			Scene = Scene,
+			TargetMixer = TargetMixer,
+			CreatedTime = _CreatedTime,
+			SourceOffset = sourceOffset,
+			SourceCount = snap.AllModels.Count - sourceOffset,
+			HasLipSync = LipSync.Enabled,
+			LipSync = LipSync,
+			Handle = this,
+		};
 	}
+
 }

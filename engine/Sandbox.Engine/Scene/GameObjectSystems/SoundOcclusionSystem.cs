@@ -12,7 +12,7 @@ internal sealed class SoundOcclusionSystem : GameObjectSystem<SoundOcclusionSyst
 	/// We cache listener positions on the main thread because Listener.Position
 	/// has a main thread assertion and cannot be accessed from worker threads.
 	/// </summary>
-	record struct PendingOcclusionUpdate( SoundHandle Handle, Audio.SteamAudioSource Source, Vector3 ListenerPosition );
+	record struct PendingOcclusionUpdate( SoundHandle Handle, Audio.AcousticModel Source, Vector3 ListenerPosition );
 
 	readonly List<SoundHandle> _tempHandles = new();
 	readonly List<PendingOcclusionUpdate> _pendingUpdates = new();
@@ -125,7 +125,7 @@ internal sealed class SoundOcclusionSystem : GameObjectSystem<SoundOcclusionSyst
 		SoundHandle.GetActive( _tempHandles );
 
 		// Sort by creation time descending (newest first) to match mixer priority.
-		_tempHandles.Sort( SoundHandle.ByCreatedTimeDescending );
+		_tempHandles.Sort( static ( x, y ) => y._CreatedTime.CompareTo( x._CreatedTime ) );
 
 		// Track voice count per mixer to respect MaxVoices limits
 		_voiceCountByMixer.Clear();
@@ -149,7 +149,7 @@ internal sealed class SoundOcclusionSystem : GameObjectSystem<SoundOcclusionSyst
 
 			foreach ( var listener in listeners )
 			{
-				var source = handle.GetSource( listener );
+				var source = handle.GetAcousticModel( listener );
 				if ( source is null ) continue;
 
 				if ( source.TimeUntilNextOcclusionCalc <= 0 )

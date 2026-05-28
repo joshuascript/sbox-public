@@ -123,12 +123,29 @@ public partial class Scene : GameObject
 		};
 	}
 
+	sealed class TraceQueryResult
+	{
+		public CQueryResult Vec = CQueryResult.Create();
+		~TraceQueryResult() => Vec.DeleteThis();
+	}
+
+	[ThreadStatic] static TraceQueryResult _threadQueryResult;
+	static CQueryResult ThreadQueryResult
+	{
+		get
+		{
+			_threadQueryResult ??= new TraceQueryResult();
+			_threadQueryResult.Vec.RemoveAll();
+			return _threadQueryResult.Vec;
+		}
+	}
+
 	/// <summary>
 	/// Find game objects in a sphere using physics.
 	/// </summary>
 	public IEnumerable<GameObject> FindInPhysics( Sphere sphere )
 	{
-		var results = CQueryResult.Create();
+		var results = ThreadQueryResult;
 		PhysicsWorld.native.Query( results, sphere.Center, sphere.Radius, 0x07 );
 		return FilterQueryResults( results );
 	}
@@ -138,7 +155,7 @@ public partial class Scene : GameObject
 	/// </summary>
 	public IEnumerable<GameObject> FindInPhysics( BBox box )
 	{
-		var results = CQueryResult.Create();
+		var results = ThreadQueryResult;
 		PhysicsWorld.native.Query( results, box, 0x07 );
 		return FilterQueryResults( results );
 	}
@@ -152,7 +169,7 @@ public partial class Scene : GameObject
 		if ( !frustum.TryGetCorners( corners ) )
 			return Enumerable.Empty<GameObject>();
 
-		var results = CQueryResult.Create();
+		var results = ThreadQueryResult;
 		PhysicsWorld.native.Query( results, (IntPtr)corners, 8, 0x07 );
 		return FilterQueryResults( results );
 	}
@@ -177,8 +194,6 @@ public partial class Scene : GameObject
 
 			gameObjects.Add( gameObject );
 		}
-
-		results.DeleteThis();
 
 		return gameObjects;
 	}

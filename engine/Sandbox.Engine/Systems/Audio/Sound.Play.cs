@@ -3,9 +3,6 @@ namespace Sandbox;
 
 public static unsafe partial class Sound
 {
-	internal static void OnVoiceDeleted( int voiceIndex )
-	{
-	}
 
 	public static SoundHandle Play( string eventName, float fadeInTime = 0.0f )
 	{
@@ -130,6 +127,8 @@ public static unsafe partial class Sound
 
 	internal static SoundHandle PlayFile( CSfxTable soundFile, float volume = 1.0f, float pitch = 1.0f, float delay = 0.0f, float fadeInTime = 0.0f, string debugName = "" )
 	{
+		ThreadSafe.AssertIsMainThread();
+
 		if ( soundFile.IsNull )
 			return default;
 
