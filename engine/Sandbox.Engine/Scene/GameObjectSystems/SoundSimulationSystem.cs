@@ -24,10 +24,10 @@ internal sealed partial class SoundSimulationSystem : GameObjectSystem<SoundSimu
 		var mixer = handle?.GetEffectiveMixer() ?? Audio.Mixer.Master;
 		if ( mixer is null ) return t;
 
-		var blocking = mixer.GetBlockingSimulationTags();
+		var blocking = mixer.GetBlockingTags();
 		if ( blocking is { IsEmpty: false } ) t = t.WithAnyTags( blocking );
 
-		var ignored = mixer.GetIgnoredSimulationTags();
+		var ignored = mixer.GetIgnoredTags();
 		if ( ignored is { IsEmpty: false } ) t = t.WithoutTags( ignored );
 
 		return t;
@@ -93,29 +93,41 @@ internal sealed partial class SoundSimulationSystem : GameObjectSystem<SoundSimu
 
 		if ( total > 0 )
 		{
-			int interleave = Math.Min( occCount, roomCount ) * 2;
-			Sandbox.Utility.Parallel.For( 0, total, i =>
-			{
-				bool isRoom;
-				int sub;
-				if ( i < interleave )
-				{
-					isRoom = (i & 1) == 1;
-					sub = i >> 1;
-				}
-				else
-				{
-					sub = (interleave >> 1) + (i - interleave);
-					isRoom = occCount <= roomCount;
-				}
-				if ( isRoom ) RoomSourceUpdate( sub, world );
-				else OcclusionUpdate( sub, world );
-			} );
+			_parallelWorld = world;
+			_parallelOccCount = occCount;
+			_parallelRoomCount = roomCount;
+			_parallelInterleave = Math.Min( occCount, roomCount ) * 2;
+			_parallelDispatchAction ??= ParallelDispatch;
+			System.Threading.Tasks.Parallel.For( 0, total, _parallelDispatchAction );
 		}
 
 		ApplyOcclusionResults();
 		ApplyRoomResults();
 		_tick++;
 		if ( sw is not null ) LastSimUpdateMs = (float)sw.Elapsed.TotalMilliseconds;
+	}
+
+	PhysicsWorld _parallelWorld;
+	int _parallelOccCount;
+	int _parallelRoomCount;
+	int _parallelInterleave;
+	Action<int> _parallelDispatchAction;
+
+	void ParallelDispatch( int i )
+	{
+		bool isRoom;
+		int sub;
+		if ( i < _parallelInterleave )
+		{
+			isRoom = (i & 1) == 1;
+			sub = i >> 1;
+		}
+		else
+		{
+			sub = (_parallelInterleave >> 1) + (i - _parallelInterleave);
+			isRoom = _parallelOccCount <= _parallelRoomCount;
+		}
+		if ( isRoom ) RoomSourceUpdate( sub, _parallelWorld );
+		else OcclusionUpdate( sub, _parallelWorld );
 	}
 }

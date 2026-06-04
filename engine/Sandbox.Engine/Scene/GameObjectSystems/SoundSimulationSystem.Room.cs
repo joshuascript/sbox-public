@@ -14,7 +14,7 @@ partial class SoundSimulationSystem
 	const float UnitsPerMeter = 39.37f;
 	const float AccumHalfLife = 0.6f;
 	const float ResetDist = 256f;
-	const int MaxRoomSourcesPerFrame = 12;
+	const int MaxRoomSourcesPerFrame = 10;
 
 	struct RoomWork
 	{
@@ -23,8 +23,6 @@ partial class SoundSimulationSystem
 		public int RayCount;
 		public float Priority;
 		public Vector3 Origin;
-		public EscapeBodyBuffer EscapeBodies;
-		public int EscapeBodyCount;
 		public float EscapedWeight;
 		public float TotalDist;
 		public FrequencyBands TotalRefl;
@@ -88,6 +86,12 @@ partial class SoundSimulationSystem
 
 		foreach ( var handle in _culledHandles )
 		{
+			if ( !handle.ReverbEnabled || (handle.TargetMixer is { } mixer && mixer.Reverb <= 0f) )
+			{
+				handle.SourceRoom = default;
+				continue;
+			}
+
 			ref var est = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault( _estimators, handle, out _ );
 			est ??= new SourceEstimator();
 
@@ -133,9 +137,10 @@ partial class SoundSimulationSystem
 		ref var u = ref CollectionsMarshal.AsSpan( _roomWork )[i];
 
 		u.Origin = u.Estimator.LastPos + Vector3.Up * 4f;
-		u.EscapeBodyCount = GatherListenerEscapeBodies( u.Estimator.LastPos, u.EscapeBodies );
+		EscapeBodyBuffer escape = default;
+		int escapeCount = GatherListenerEscapeBodies( u.Estimator.LastPos, escape );
 
-		var escapeIgnore = ((Span<PhysicsBody>)u.EscapeBodies)[..u.EscapeBodyCount];
+		var escapeIgnore = ((Span<PhysicsBody>)escape)[..escapeCount];
 
 		for ( int r = 0; r < u.RayCount; r++ )
 		{
