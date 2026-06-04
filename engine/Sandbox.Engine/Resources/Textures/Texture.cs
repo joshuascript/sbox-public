@@ -211,6 +211,11 @@ public partial class Texture : Resource, IDisposable
 	{
 		get
 		{
+			if ( OperatingSystem.IsLinux() )
+			{
+				return Vector4.Zero;
+			}
+
 			// I think this would be safe to cache off, right?
 			return g_pRenderDevice.GetSheetInfo( native );
 		}
