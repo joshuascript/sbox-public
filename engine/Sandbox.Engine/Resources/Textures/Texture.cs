@@ -211,6 +211,8 @@ public partial class Texture : Resource, IDisposable
 	{
 		get
 		{
+			// Spritesheet animation is broken natively, and there's no way to fix it.
+			// We can, however, restore textures in the meantime.
 			if ( OperatingSystem.IsLinux() )
 			{
 				return Vector4.Zero;
