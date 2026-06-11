@@ -222,7 +222,7 @@ public class BaseFileSystem
 	internal string GetRelativePath( string path )
 	{
 		if ( string.IsNullOrWhiteSpace( path ) ) return null;
-		return GetRelativePath( system, path.ToLowerInvariant() );
+		return GetRelativePath( system, path )?.ToLowerInvariant();
 	}
 
 	/// <summary>
@@ -321,12 +321,8 @@ public class BaseFileSystem
 	{
 		// Log.Trace( $"CreateFileSystem( {path} ) [{GetFullPath(path)}]" );
 
-		var subPath = FixPath( path );
-
-		if ( OperatingSystem.IsLinux() )
-			return new BaseFileSystem( new CaseInsensitiveSubFileSystem( system, subPath, false ) );
-
-		return new BaseFileSystem( new Zio.FileSystems.SubFileSystem( system, subPath, false ) );
+		var sub = new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false, false );
+		return new BaseFileSystem( sub );
 	}
 
 

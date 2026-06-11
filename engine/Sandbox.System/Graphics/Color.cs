@@ -890,6 +890,9 @@ public partial struct Color : IEquatable<Color>
 	/// <returns>The parsed color if operation completed successfully.</returns>
 	public static Color? Parse( string value )
 	{
+		if ( string.IsNullOrWhiteSpace( value ) )
+			return default;
+
 		var p = new Parse( value );
 		return Parse( ref p );
 	}

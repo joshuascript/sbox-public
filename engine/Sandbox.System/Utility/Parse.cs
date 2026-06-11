@@ -22,7 +22,7 @@ namespace Sandbox
 		public Parse( string value, string filename = "nofile", int lineOffset = 0 ) : this()
 		{
 			FileName = filename;
-			Text = value;
+			Text = value ?? string.Empty;
 
 			this.lineOffset = lineOffset;
 		}

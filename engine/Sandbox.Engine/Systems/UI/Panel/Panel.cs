@@ -307,6 +307,8 @@ public partial class Panel : IPanel, IValid, IComponent
 
 		try
 		{
+			UpdateSceneIndex();
+
 			if ( ParentHasChanged )
 			{
 				ParentHasChanged = false;
