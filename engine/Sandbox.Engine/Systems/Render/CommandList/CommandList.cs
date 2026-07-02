@@ -603,6 +603,27 @@ public sealed unsafe partial class CommandList
 	}
 
 	/// <summary>
+	/// Draws instances of a model using GPU instancing, with per-instance transforms read from
+	/// <paramref name="transformBuffer"/> and the instance count provided by indirect draw arguments.
+	/// Feeds the standard `GetTransformMatrix()` path, so normal/custom material shaders render unchanged.
+	/// </summary>
+	/// <param name="model">The model to draw</param>
+	/// <param name="transformBuffer">Per-instance transforms, indexed 0..count-1</param>
+	/// <param name="indirectArgs">Buffer containing the DrawIndexedInstancedArguments</param>
+	/// <param name="argsOffset">Optional byte offset into the indirect args buffer</param>
+	/// <param name="lodLevel">LOD level to render (0 = highest detail)</param>
+	/// <param name="attributes">Optional attributes to apply only for this draw call</param>
+	public void DrawModelInstancedIndirect( Model model, GpuBuffer transformBuffer, GpuBuffer indirectArgs, int argsOffset = 0, int lodLevel = 0, RenderAttributes attributes = null )
+	{
+		static void Execute( ref Entry entry, CommandList commandList )
+		{
+			Graphics.DrawModelInstancedIndirect( (Model)entry.Object1, (GpuBuffer)entry.Object2, (GpuBuffer)entry.Object3, (int)entry.Data1.x, (int)entry.Data1.y, (RenderAttributes)entry.Object4 );
+		}
+
+		AddEntry( &Execute, new Entry { Object1 = model, Object2 = transformBuffer, Object3 = indirectArgs, Data1 = new Vector4( argsOffset, lodLevel, 0, 0 ), Object4 = attributes } );
+	}
+
+	/// <summary>
 	/// Draws multiple instances of a model using GPU instancing.
 	/// This is similar to <see cref="DrawModelInstancedIndirect(Model, GpuBuffer, int, RenderAttributes)"/>,
 	/// except the count is provided from the CPU rather than via a GPU buffer.
@@ -1118,6 +1139,38 @@ public sealed unsafe partial class CommandList
 		}
 
 		AddEntry( &Execute, new Entry { Object1 = buffer, Data1 = new Vector4( value, 0, 0, 0 ) } );
+	}
+
+	/// <summary>
+	/// Resets the hidden append/structured-buffer counter of <paramref name="buffer"/> to <paramref name="value"/>.
+	/// </summary>
+	/// <param name="buffer">An <see cref="GpuBuffer.UsageFlags.Append"/> or structured buffer.</param>
+	/// <param name="value">The counter value to set. Defaults to zero.</param>
+	public void SetCounterValue( GpuBuffer buffer, uint value = 0 )
+	{
+		static void Execute( ref Entry entry, CommandList commandList )
+		{
+			((GpuBuffer)entry.Object1).SetCounterValue( (uint)entry.Data1.x );
+		}
+
+		AddEntry( &Execute, new Entry { Object1 = buffer, Data1 = new Vector4( value, 0, 0, 0 ) } );
+	}
+
+	/// <summary>
+	/// Copies the hidden append-buffer counter of <paramref name="buffer"/> into <paramref name="destBuffer"/>.
+	/// Useful for feeding a survivor count into an indirect draw/dispatch argument buffer.
+	/// </summary>
+	/// <param name="buffer">The <see cref="GpuBuffer.UsageFlags.Append"/> buffer to read the counter from.</param>
+	/// <param name="destBuffer">The buffer to write the counter into.</param>
+	/// <param name="destBufferOffset">Byte offset into <paramref name="destBuffer"/> to write at.</param>
+	public void CopyStructureCount( GpuBuffer buffer, GpuBuffer destBuffer, int destBufferOffset = 0 )
+	{
+		static void Execute( ref Entry entry, CommandList commandList )
+		{
+			((GpuBuffer)entry.Object1).CopyStructureCount( (GpuBuffer)entry.Object2, (int)entry.Data1.x );
+		}
+
+		AddEntry( &Execute, new Entry { Object1 = buffer, Object2 = destBuffer, Data1 = new Vector4( destBufferOffset, 0, 0, 0 ) } );
 	}
 
 	/// <summary>
