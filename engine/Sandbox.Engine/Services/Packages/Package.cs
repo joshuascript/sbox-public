@@ -510,6 +510,16 @@ public partial class Package
 			foreach ( var p in PackageReferences )
 				yield return p;
 		}
+
+		// A targeted addon/asset depends on its parent game - except maps
+		// Bit of a shitty edge case, but we don't want a map to load a second,
+		// DIFFERENT game when loading it in another game like Sandbox 
+		if ( !string.Equals( TypeName, "map", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var parent = Info.ParentPackage;
+			if ( TryParseIdent( parent, out _ ) )
+				yield return parent;
+		}
 	}
 
 	/// <summary>

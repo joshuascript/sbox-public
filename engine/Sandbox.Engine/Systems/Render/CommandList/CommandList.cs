@@ -471,8 +471,9 @@ public sealed unsafe partial class CommandList
 			// Begin a debug marker scope so PIX/RenderDoc show this list
 			Graphics.Context.BeginPixEvent( _markerName );
 
-			// GPU Profiler timestamp
-			NativeEngine.CSceneSystem.SetManagedPerfMarker( Graphics.Context, _debugName ?? "CommandList" );
+			// GPU profiler timing scope, closed after execution below. The profiler nests this under its
+			// containing layer by GPU-timestamp containment in the summary - no parent passed here.
+			var perfScope = NativeEngine.CSceneSystem.BeginManagedPerfMarker( Graphics.Context, _debugName ?? "CommandList" );
 
 			// Execute all commands
 			try
@@ -490,6 +491,8 @@ public sealed unsafe partial class CommandList
 			}
 
 			Graphics.Context.EndPixEvent();
+
+			NativeEngine.CSceneSystem.EndManagedPerfMarker( Graphics.Context, perfScope );
 
 			// Reset the state and return to the pool
 			state.Reset();
@@ -691,38 +694,69 @@ public sealed unsafe partial class CommandList
 	/// <param name="vertexBuffer">The GPU buffer containing vertex data.</param>
 	/// <param name="material">The material to use for rendering.</param>
 	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
-	/// <param name="bufferOffset">Optional byte offset into the indirect buffer.</param>
+	/// <param name="bufferOffset">Optional element offset into the indirect buffer.</param>
 	/// <param name="attributes">Optional render attributes to apply only for this draw call.</param>
 	/// <param name="primitiveType">The type of primitives to render. Defaults to triangles.</param>
 	public void DrawInstancedIndirect<T>( GpuBuffer<T> vertexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset = 0, RenderAttributes attributes = null, Graphics.PrimitiveType primitiveType = Graphics.PrimitiveType.Triangles ) where T : unmanaged
+		=> DrawInstancedIndirect( vertexBuffer, material, indirectBuffer, bufferOffset, attributes, primitiveType, 1 );
+
+	/// <summary>
+	/// Draws instanced geometry using a vertex buffer, executing one or more indirect draw arguments stored in a GPU buffer.
+	/// </summary>
+	/// <typeparam name="T">The vertex type used for vertex layout.</typeparam>
+	/// <param name="vertexBuffer">The GPU buffer containing vertex data.</param>
+	/// <param name="material">The material to use for rendering.</param>
+	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
+	/// <param name="bufferOffset">Element offset into the indirect buffer.</param>
+	/// <param name="attributes">Render attributes to apply only for this draw call, or null.</param>
+	/// <param name="primitiveType">The type of primitives to render.</param>
+	/// <param name="drawCount">Number of draw argument structs to read and execute.</param>
+	/// <param name="stride">Byte stride between draw argument structs. Use this when your indirect buffer packs extra per-draw userdata. Must be a multiple of 4 and at least the size of the draw argument struct. 0 uses the natural size.</param>
+	public void DrawInstancedIndirect<T>( GpuBuffer<T> vertexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset, RenderAttributes attributes, Graphics.PrimitiveType primitiveType, uint drawCount, uint stride = 0 ) where T : unmanaged
 	{
 		static void Execute( ref Entry entry, CommandList commandList )
 		{
-			Graphics.DrawInstancedIndirect( (GpuBuffer<T>)entry.Object1, (Material)entry.Object2, (GpuBuffer)entry.Object3, (uint)entry.Data1.x, (RenderAttributes)entry.Object4, (Graphics.PrimitiveType)(int)entry.Data1.y );
+			Graphics.DrawInstancedIndirect( (GpuBuffer<T>)entry.Object1, (Material)entry.Object2, (GpuBuffer)entry.Object3, (uint)entry.Data1.x, (RenderAttributes)entry.Object4, (Graphics.PrimitiveType)(int)entry.Data1.y, (uint)entry.Data1.z, (uint)entry.Data1.w );
 		}
 
-		AddEntry( &Execute, new Entry { Object1 = vertexBuffer, Object2 = material, Object3 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, 0, 0 ), Object4 = attributes } );
+		AddEntry( &Execute, new Entry { Object1 = vertexBuffer, Object2 = material, Object3 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, drawCount, stride ), Object4 = attributes } );
 	}
 
 	/// <summary>
-	/// Draws instanced geometry using a vertex buffer and indirect draw arguments stored in a GPU buffer.
+	/// Draws instanced geometry using indirect draw arguments stored in a GPU buffer.
 	/// </summary>
 	/// <remarks>
 	/// Vertex data is accessed in shader through buffer attribute and SV_VertexID.
 	/// </remarks>
 	/// <param name="material">The material to use for rendering.</param>
 	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
-	/// <param name="bufferOffset">Optional byte offset into the indirect buffer.</param>
+	/// <param name="bufferOffset">Optional element offset into the indirect buffer.</param>
 	/// <param name="attributes">Optional render attributes to apply only for this draw call.</param>
 	/// <param name="primitiveType">The type of primitives to render. Defaults to triangles.</param>
 	public void DrawInstancedIndirect( Material material, GpuBuffer indirectBuffer, uint bufferOffset = 0, RenderAttributes attributes = null, Graphics.PrimitiveType primitiveType = Graphics.PrimitiveType.Triangles )
+		=> DrawInstancedIndirect( material, indirectBuffer, bufferOffset, attributes, primitiveType, 1 );
+
+	/// <summary>
+	/// Draws instanced geometry, executing one or more indirect draw arguments stored in a GPU buffer.
+	/// </summary>
+	/// <remarks>
+	/// Vertex data is accessed in shader through buffer attribute and SV_VertexID.
+	/// </remarks>
+	/// <param name="material">The material to use for rendering.</param>
+	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
+	/// <param name="bufferOffset">Element offset into the indirect buffer.</param>
+	/// <param name="attributes">Render attributes to apply only for this draw call, or null.</param>
+	/// <param name="primitiveType">The type of primitives to render.</param>
+	/// <param name="drawCount">Number of draw argument structs to read and execute.</param>
+	/// <param name="stride">Byte stride between draw argument structs. Use this when your indirect buffer packs extra per-draw userdata. Must be a multiple of 4 and at least the size of the draw argument struct. 0 uses the natural size.</param>
+	public void DrawInstancedIndirect( Material material, GpuBuffer indirectBuffer, uint bufferOffset, RenderAttributes attributes, Graphics.PrimitiveType primitiveType, uint drawCount, uint stride = 0 )
 	{
 		static void Execute( ref Entry entry, CommandList commandList )
 		{
-			Graphics.DrawInstancedIndirect( (Material)entry.Object1, (GpuBuffer)entry.Object2, (uint)entry.Data1.x, (RenderAttributes)entry.Object3, (Graphics.PrimitiveType)(int)entry.Data1.y );
+			Graphics.DrawInstancedIndirect( (Material)entry.Object1, (GpuBuffer)entry.Object2, (uint)entry.Data1.x, (RenderAttributes)entry.Object3, (Graphics.PrimitiveType)(int)entry.Data1.y, (uint)entry.Data1.z, (uint)entry.Data1.w );
 		}
 
-		AddEntry( &Execute, new Entry { Object1 = material, Object2 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, 0, 0 ), Object3 = attributes } );
+		AddEntry( &Execute, new Entry { Object1 = material, Object2 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, drawCount, stride ), Object3 = attributes } );
 	}
 
 	/// <summary>
@@ -733,17 +767,33 @@ public sealed unsafe partial class CommandList
 	/// <param name="indexBuffer">The GPU buffer containing index data.</param>
 	/// <param name="material">The material to use for rendering.</param>
 	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
-	/// <param name="bufferOffset">Optional byte offset into the indirect buffer.</param>
+	/// <param name="bufferOffset">Optional element offset into the indirect buffer.</param>
 	/// <param name="attributes">Optional render attributes to apply only for this draw call.</param>
 	/// <param name="primitiveType">The type of primitives to render. Defaults to triangles.</param>
 	public void DrawIndexedInstancedIndirect<T>( GpuBuffer<T> vertexBuffer, GpuBuffer indexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset = 0, RenderAttributes attributes = null, Graphics.PrimitiveType primitiveType = Graphics.PrimitiveType.Triangles ) where T : unmanaged
+		=> DrawIndexedInstancedIndirect( vertexBuffer, indexBuffer, material, indirectBuffer, bufferOffset, attributes, primitiveType, 1 );
+
+	/// <summary>
+	/// Draws instanced indexed geometry, executing one or more indirect draw arguments stored in a GPU buffer.
+	/// </summary>
+	/// <typeparam name="T">The vertex type used for vertex layout.</typeparam>
+	/// <param name="vertexBuffer">The GPU buffer containing vertex data.</param>
+	/// <param name="indexBuffer">The GPU buffer containing index data.</param>
+	/// <param name="material">The material to use for rendering.</param>
+	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
+	/// <param name="bufferOffset">Element offset into the indirect buffer.</param>
+	/// <param name="attributes">Render attributes to apply only for this draw call, or null.</param>
+	/// <param name="primitiveType">The type of primitives to render.</param>
+	/// <param name="drawCount">Number of draw argument structs to read and execute.</param>
+	/// <param name="stride">Byte stride between draw argument structs. Use this when your indirect buffer packs extra per-draw userdata. Must be a multiple of 4 and at least the size of the draw argument struct. 0 uses the natural size.</param>
+	public void DrawIndexedInstancedIndirect<T>( GpuBuffer<T> vertexBuffer, GpuBuffer indexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset, RenderAttributes attributes, Graphics.PrimitiveType primitiveType, uint drawCount, uint stride = 0 ) where T : unmanaged
 	{
 		static void Execute( ref Entry entry, CommandList commandList )
 		{
-			Graphics.DrawIndexedInstancedIndirect( (GpuBuffer<T>)entry.Object1, (GpuBuffer)entry.Object2, (Material)entry.Object3, (GpuBuffer)entry.Object4, (uint)entry.Data1.x, (RenderAttributes)entry.Object5, (Graphics.PrimitiveType)(int)entry.Data1.y );
+			Graphics.DrawIndexedInstancedIndirect( (GpuBuffer<T>)entry.Object1, (GpuBuffer)entry.Object2, (Material)entry.Object3, (GpuBuffer)entry.Object4, (uint)entry.Data1.x, (RenderAttributes)entry.Object5, (Graphics.PrimitiveType)(int)entry.Data1.y, (uint)entry.Data1.z, (uint)entry.Data1.w );
 		}
 
-		AddEntry( &Execute, new Entry { Object1 = vertexBuffer, Object2 = indexBuffer, Object3 = material, Object4 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, 0, 0 ), Object5 = attributes } );
+		AddEntry( &Execute, new Entry { Object1 = vertexBuffer, Object2 = indexBuffer, Object3 = material, Object4 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, drawCount, stride ), Object5 = attributes } );
 	}
 
 	/// <summary>
@@ -755,17 +805,34 @@ public sealed unsafe partial class CommandList
 	/// <param name="indexBuffer">The GPU buffer containing index data.</param>
 	/// <param name="material">The material to use for rendering.</param>
 	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
-	/// <param name="bufferOffset">Optional byte offset into the indirect buffer.</param>
+	/// <param name="bufferOffset">Optional element offset into the indirect buffer.</param>
 	/// <param name="attributes">Optional render attributes to apply only for this draw call.</param>
 	/// <param name="primitiveType">The type of primitives to render. Defaults to triangles.</param>
 	public void DrawIndexedInstancedIndirect( GpuBuffer indexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset = 0, RenderAttributes attributes = null, Graphics.PrimitiveType primitiveType = Graphics.PrimitiveType.Triangles )
+		=> DrawIndexedInstancedIndirect( indexBuffer, material, indirectBuffer, bufferOffset, attributes, primitiveType, 1 );
+
+	/// <summary>
+	/// Draws instanced indexed geometry, executing one or more indirect draw arguments stored in a GPU buffer.
+	/// </summary>
+	/// <remarks>
+	/// Vertex data is accessed in shader through buffer attribute and SV_VertexID.
+	/// </remarks>
+	/// <param name="indexBuffer">The GPU buffer containing index data.</param>
+	/// <param name="material">The material to use for rendering.</param>
+	/// <param name="indirectBuffer">The GPU buffer containing indirect draw arguments.</param>
+	/// <param name="bufferOffset">Element offset into the indirect buffer.</param>
+	/// <param name="attributes">Render attributes to apply only for this draw call, or null.</param>
+	/// <param name="primitiveType">The type of primitives to render.</param>
+	/// <param name="drawCount">Number of draw argument structs to read and execute.</param>
+	/// <param name="stride">Byte stride between draw argument structs. Use this when your indirect buffer packs extra per-draw userdata. Must be a multiple of 4 and at least the size of the draw argument struct. 0 uses the natural size.</param>
+	public void DrawIndexedInstancedIndirect( GpuBuffer indexBuffer, Material material, GpuBuffer indirectBuffer, uint bufferOffset, RenderAttributes attributes, Graphics.PrimitiveType primitiveType, uint drawCount, uint stride = 0 )
 	{
 		static void Execute( ref Entry entry, CommandList commandList )
 		{
-			Graphics.DrawIndexedInstancedIndirect( (GpuBuffer)entry.Object1, (Material)entry.Object2, (GpuBuffer)entry.Object3, (uint)entry.Data1.x, (RenderAttributes)entry.Object4, (Graphics.PrimitiveType)(int)entry.Data1.y );
+			Graphics.DrawIndexedInstancedIndirect( (GpuBuffer)entry.Object1, (Material)entry.Object2, (GpuBuffer)entry.Object3, (uint)entry.Data1.x, (RenderAttributes)entry.Object4, (Graphics.PrimitiveType)(int)entry.Data1.y, (uint)entry.Data1.z, (uint)entry.Data1.w );
 		}
 
-		AddEntry( &Execute, new Entry { Object1 = indexBuffer, Object2 = material, Object3 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, 0, 0 ), Object4 = attributes } );
+		AddEntry( &Execute, new Entry { Object1 = indexBuffer, Object2 = material, Object3 = indirectBuffer, Data1 = new Vector4( bufferOffset, (int)primitiveType, drawCount, stride ), Object4 = attributes } );
 	}
 
 	/// <summary>

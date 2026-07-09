@@ -18,6 +18,7 @@ public partial class GameObject
 					GameObjectFlags.NotNetworked |
 					GameObjectFlags.Absolute |
 					GameObjectFlags.PhysicsBone |
+					GameObjectFlags.Static |
 					GameObjectFlags.Hidden;
 
 	/// <summary>
@@ -218,7 +219,10 @@ public partial class GameObject
 		if ( (!options.SceneForNetwork && !options.SingleNetworkObject)
 				&& (IsNestedPrefabInstanceRoot || (IsOutermostPrefabInstanceRoot && options.SerializePrefabForDiff)) )
 		{
-			if ( options.SerializeForPrefabInstanceToPrefabUpdate && Parent is not null && Parent.IsOutermostPrefabInstanceRoot )
+			// For prefab updates all existing nested roots keep their instance data, regardless of depth.
+			// Marking them as nested source instead would wipe their mappings in the prefab cache scene,
+			// where InitMappingsForNestedInstance has no outer instance lookup to rebuild them from.
+			if ( options.SerializeForPrefabInstanceToPrefabUpdate )
 			{
 				json[JsonKeys.EditorSkipPrefabBreakOnRefresh] = true;
 			}
