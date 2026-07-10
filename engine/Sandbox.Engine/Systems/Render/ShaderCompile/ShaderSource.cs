@@ -13,6 +13,10 @@ class ShaderSource
 	public string AbsolutePath { get; internal set; }
 	public string RelativePath { get; internal set; }
 
+	internal string NativeFilename => string.IsNullOrWhiteSpace( RelativePath ) ? AbsolutePath : RelativePath;
+	internal string CompiledPath => AbsolutePath + "_c";
+	internal bool HasCompiledFile => System.IO.File.Exists( CompiledPath );
+
 	public List<ProgramSource> Programs { get; set; } = new();
 
 	public bool IsOutOfDate { get; set; }
@@ -38,7 +42,7 @@ class ShaderSource
 	{
 		var vfx = new Shader();
 
-		bool loaded = vfx.LoadFromCompiledUnlessOutOfDate( AbsolutePath );
+		bool loaded = vfx.LoadFromCompiledUnlessOutOfDate( NativeFilename );
 
 		//
 		// the compiled shader loaded, compare to see what needs recompiling

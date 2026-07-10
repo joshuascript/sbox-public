@@ -144,7 +144,7 @@ namespace Editor
 		public Pixmap GetIcon()
 		{
 			var ptr = _button.getIconAsPixmap();
-			return new Pixmap( ptr );
+			return ptr.IsNull ? null : new Pixmap( ptr );
 		}
 
 		internal void InternalOnPressed() => OnPressed();

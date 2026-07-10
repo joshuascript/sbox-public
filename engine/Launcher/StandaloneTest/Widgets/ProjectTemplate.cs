@@ -31,6 +31,9 @@ internal class ProjectTemplate
 
 	public void Apply( string targetDir, ref ProjectConfig config )
 	{
+		if ( string.IsNullOrEmpty( TemplatePath ) )
+			return;
+
 		var sourceDir = Editor.FileSystem.Root.GetFullPath( TemplatePath );
 
 		if ( !Directory.Exists( sourceDir ) )

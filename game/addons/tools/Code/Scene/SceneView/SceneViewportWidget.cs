@@ -1,4 +1,4 @@
-﻿namespace Editor;
+namespace Editor;
 
 public partial class SceneViewportWidget : Widget
 {
@@ -33,6 +33,8 @@ public partial class SceneViewportWidget : Widget
 	private CameraComponent _ejectCamera;
 
 	internal RealTimeSince timeSinceCameraSpeedChange = 99;
+	int linuxPaintLogFrame;
+	int preFrameLogFrame;
 
 	public SceneViewportWidget( SceneViewWidget sceneView, int id ) : base( sceneView )
 	{
@@ -77,8 +79,8 @@ public partial class SceneViewportWidget : Widget
 		FocusMode = FocusMode.TabOrClickOrWheel;
 
 		Overlay = new SceneOverlayWidget( this );
-		Overlay.Position = ScreenPosition;
-		Overlay.Size = Size;
+		Overlay.Position = System.OperatingSystem.IsLinux() ? Vector2.Zero : ScreenPosition;
+		Overlay.Size = System.OperatingSystem.IsLinux() ? new Vector2( Size.x, 48 ) : Size;
 		Overlay.Show();
 
 		ViewportOptions = new ViewportOptions( this );
@@ -146,7 +148,7 @@ public partial class SceneViewportWidget : Widget
 	void UpdateInputState()
 	{
 		// If mouse buttons are pressed, maintain current hasMouseInput state until released
-		if ( Application.MouseButtons != MouseButtons.None )
+		if ( Renderer.MouseButtons != MouseButtons.None )
 		{
 			mouseWasPressed = true;
 			framesAfterRelease = 0;
@@ -177,6 +179,13 @@ public partial class SceneViewportWidget : Widget
 	protected override void OnPaint()
 	{
 		base.OnPaint();
+
+		if ( System.OperatingSystem.IsLinux() &&
+			Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_BIND_LOG" ) == "1" &&
+			(++linuxPaintLogFrame <= 5 || linuxPaintLogFrame % 60 == 0) )
+		{
+			System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-parent-paint] frame={linuxPaintLogFrame} size={Size} screen={ScreenPosition} rendererVisible={Renderer?.Visible} rendererSize={Renderer?.Size} rendererScreen={Renderer?.ScreenPosition} overlayVisible={Overlay?.Visible} overlaySize={Overlay?.Size}{Environment.NewLine}" );
+		}
 
 		//if ( isFullscreen )
 		{
@@ -274,7 +283,8 @@ public partial class SceneViewportWidget : Widget
 		_activeCamera.ZNear = EditorPreferences.CameraZNear;
 		_activeCamera.ZFar = wantOrtho ? MASSIVEZFAR : EditorPreferences.CameraZFar;
 		_activeCamera.FieldOfView = CurrentFOV;
-		_activeCamera.EnablePostProcessing = State.EnablePostProcessing;
+		// ponytail: Linux editor swapchains white out after the postprocess history warms up; opt back in once that path is fixed.
+		_activeCamera.EnablePostProcessing = State.EnablePostProcessing && (!System.OperatingSystem.IsLinux() || Environment.GetEnvironmentVariable( "SBOX_LINUX_VIEWPORT_POSTPROCESSING" ) == "1");
 		_activeCamera.Orthographic = wantOrtho && TransitionBlend.AlmostEqual( 1 );
 		_activeCamera.OrthographicHeight = CurrentOrthoHeight;
 		_activeCamera.DebugMode = State.RenderMode;
@@ -500,8 +510,20 @@ public partial class SceneViewportWidget : Widget
 		UpdateInputState();
 
 		var isActive = Session == SceneEditorSession.Active;
+		var logViewport = System.OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_BIND_LOG" ) == "1";
+		if ( logViewport && (++preFrameLogFrame <= 5 || preFrameLogFrame % 60 == 0) )
+		{
+			var bounds = Session.Scene.GetBounds();
+			var objects = Session.Scene.GetAllObjects( false ).Count();
+			System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-preframe] frame={preFrameLogFrame} isGame={IsGameView} active={isActive} hasMouse={hasMouseInput} view={State.View} pos={State.CameraPosition} rot={State.CameraRotation} currentFov={CurrentFOV} targetFov={TargetFOV} ortho={State.Is2D} renderMode={State.RenderMode} wire={State.WireframeMode} grid={State.ShowGrid} objects={objects} boundsCenter={bounds.Center} boundsSize={bounds.Size}{Environment.NewLine}" );
+		}
+
 		if ( !isActive && !hasMouseInput )
+		{
+			if ( logViewport )
+				System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-preframe-skip] frame={preFrameLogFrame} active={isActive} hasMouse={hasMouseInput}{Environment.NewLine}" );
 			return;
+		}
 
 		MousePosition = Renderer.FromScreen( Application.CursorPosition ) * Renderer.DpiScale;
 
@@ -537,7 +559,7 @@ public partial class SceneViewportWidget : Widget
 		if ( IsActiveWindow ) // don't update camera input if the editor window isn't active
 		{
 			// Block camera input when shift or ctrl was down first and right mouse pressed.
-			var rightDown = Application.MouseButtons.HasFlag( MouseButtons.Right );
+			var rightDown = Renderer.MouseButtons.HasFlag( MouseButtons.Right );
 			var modifiers = Application.KeyboardModifiers;
 			var modifiersDown = modifiers.Contains( KeyboardModifiers.Shift ) || modifiers.HasFlag( KeyboardModifiers.Ctrl );
 
@@ -551,7 +573,7 @@ public partial class SceneViewportWidget : Widget
 
 			if ( blockCameraForToolInput )
 			{
-				if ( Application.MouseButtons == MouseButtons.None )
+				if ( Renderer.MouseButtons == MouseButtons.None )
 				{
 					blockCameraForToolInput = false;
 				}

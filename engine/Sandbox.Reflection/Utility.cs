@@ -2,6 +2,20 @@
 
 internal static class ReflectionUtility
 {
+	static readonly string[] WindowsSystemLibraries =
+	[
+		"user32.dll",
+		"gdi32.dll",
+		"kernel32.dll",
+		"advapi32.dll",
+		"ws2_32.dll",
+		"rpcrt4.dll",
+		"ole32.dll",
+		"shell32.dll",
+		"shlwapi.dll",
+		"winmm.dll",
+		"imm32.dll"
+	];
 	public static void RunAllStaticConstructors( string assemblyName )
 	{
 		var asm = Assembly.Load( assemblyName );
@@ -268,12 +282,18 @@ internal static class ReflectionUtility
 							if ( method.IsAbstract ) continue;
 							if ( method.ContainsGenericParameters ) continue;
 
+							if ( !OperatingSystem.IsWindows() && IsWindowsSystemImport( method ) )
+								continue;
+
 							try
 							{
 								System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod( method.MethodHandle );
 							}
 							catch ( Exception e )
 							{
+								if ( !OperatingSystem.IsWindows() && IsWindowsSystemDllFailure( e ) )
+									continue;
+
 								logger.Warning( e, $"{e.Message} - {t}.{method}" );
 							}
 						}
@@ -288,6 +308,9 @@ internal static class ReflectionUtility
 							}
 							catch ( Exception e )
 							{
+								if ( !OperatingSystem.IsWindows() && IsWindowsSystemDllFailure( e ) )
+									continue;
+
 								logger.Warning( e, $"{e.Message} - {t}.{ctor}" );
 							}
 						}
@@ -304,8 +327,42 @@ internal static class ReflectionUtility
 					alc.Unloading -= unloadHandler;
 
 				cts.Dispose();
+
 			}
 		} );
+	}
+
+	static bool IsWindowsSystemImport( MethodInfo method )
+	{
+		var import = method.GetCustomAttribute<System.Runtime.InteropServices.DllImportAttribute>();
+		return IsWindowsSystemLibrary( import?.Value );
+	}
+
+	static bool IsWindowsSystemDllFailure( Exception exception )
+	{
+		if ( exception is not DllNotFoundException ) return false;
+
+		foreach ( var library in WindowsSystemLibraries )
+		{
+			if ( exception.Message.Contains( library, StringComparison.OrdinalIgnoreCase ) )
+				return true;
+		}
+
+		return false;
+	}
+
+	static bool IsWindowsSystemLibrary( string library )
+	{
+		if ( string.IsNullOrWhiteSpace( library ) ) return false;
+
+		library = System.IO.Path.GetFileName( library );
+		foreach ( var windowsLibrary in WindowsSystemLibraries )
+		{
+			if ( library.Equals( windowsLibrary, StringComparison.OrdinalIgnoreCase ) )
+				return true;
+		}
+
+		return false;
 	}
 }
 

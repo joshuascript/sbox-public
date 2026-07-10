@@ -16,17 +16,21 @@ internal class NativeAsset : Asset
 		if ( AssetType.AssetTypeCache.TryGetValue( native.GetAssetTypeId(), out var type ) )
 			AssetType = type;
 
-		Assert.NotNull( AssetType ); // agh? Maybe we mock up an unknown type type?
-
 		AssetId = native.GetAssetIndexInt();
 		Name = native.GetFriendlyName_Transient().NormalizeFilename( false );
 		RelativePath = native.GetRelativePath_Transient( AssetLocation_t.Invalid ).NormalizeFilename( false );
-		Path = System.IO.Path.ChangeExtension( RelativePath, AssetType.FileExtension ).NormalizeFilename( false );
-		AbsolutePath = native.GetAbsolutePath_Transient( AssetLocation_t.Invalid ).NormalizeFilename( false ); // invalid means get any
-		AbsoluteSourcePath = native.GetAbsolutePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false ); // invalid means get any
-		AbsoluteCompiledPath = native.GetAbsolutePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false ); // invalid means get any
+		AbsolutePath = native.GetAbsolutePath_Transient( AssetLocation_t.Invalid ).Replace( '\\', '/' ); // invalid means get any
+		AbsoluteSourcePath = native.GetAbsolutePath_Transient( AssetLocation_t.Content ).Replace( '\\', '/' ); // invalid means get any
+		AbsoluteCompiledPath = native.GetAbsolutePath_Transient( AssetLocation_t.Game ).Replace( '\\', '/' ); // invalid means get any
 		IsDeleted = string.IsNullOrEmpty( AbsolutePath );
 
+		if ( AssetType is null )
+		{
+			Path = RelativePath;
+			return;
+		}
+
+		Path = System.IO.Path.ChangeExtension( RelativePath, AssetType.FileExtension ).NormalizeFilename( false );
 		if ( AssetSystem.CloudDirectory is not null )
 		{
 			Package = AssetSystem.CloudDirectory.FindPackage( AbsolutePath, RelativePath );
@@ -45,7 +49,9 @@ internal class NativeAsset : Asset
 		LoadUserTags();
 		UpdateAutoTags();
 
-		if ( compileImmediately && !IsCompiled && AssetType.IsGameResource )
+		// Only auto-compile when the native asset can actually recompile; read-only indexed
+		// assets (no real resourcecompiler) must not drive a missing compiler on startup.
+		if ( compileImmediately && !IsCompiled && AssetType.IsGameResource && CanRecompile )
 		{
 			Compile( false );
 		}
@@ -261,6 +267,13 @@ internal class NativeAsset : Asset
 			EditorEvent.Run( "compile.shader", Path );
 			return true;
 		}
+		if ( System.OperatingSystem.IsLinux() && AssetType?.IsGameResource == true && HasSourceFile )
+		{
+			var path = AbsoluteSourcePath;
+			if ( !string.IsNullOrWhiteSpace( path ) && System.IO.File.Exists( path ) )
+				return AssetSystem.CompileResource( path, System.IO.File.ReadAllText( path ) );
+		}
+
 
 		return IAssetSystem.RecompileAsset( native, full );
 	}

@@ -14,7 +14,7 @@ namespace Facepunch;
 
 class Program
 {
-	[DllImport( "user32.dll", CharSet = CharSet.Auto )]
+	[System.Runtime.InteropServices.DllImport( "user32.dll", CharSet = CharSet.Auto )]
 	private static extern int MessageBox( IntPtr hWnd, string text, string caption, uint type );
 
 

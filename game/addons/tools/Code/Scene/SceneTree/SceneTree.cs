@@ -13,6 +13,7 @@ public partial class SceneTreeWidget : Widget
 	ToolButton SearchClear;
 
 	IDisposable _selectionUndoScope = null;
+	string _lastTreeDebugState;
 
 	public static SceneTreeWidget Current { get; private set; }
 
@@ -24,6 +25,7 @@ public partial class SceneTreeWidget : Widget
 
 		BuildUI();
 	}
+
 
 	public void BuildUI()
 	{
@@ -66,7 +68,9 @@ public partial class SceneTreeWidget : Widget
 		};
 		SearchClear.Visible = false;
 
-		TreeView = new TreeView();
+		TreeView = new TreeView( this );
+		TreeView.Name = "HierarchyTreeView";
+		TreeView.DebugModeEnabled = Environment.GetEnvironmentVariable( "SBOX_SCENE_TREE_DEBUG" ) == "1";
 		TreeView.MultiSelect = true;
 		TreeView.BodyDropTarget = TreeView.DragDropTarget.LastRoot;
 		TreeView.BodyContextMenu = OpenTreeViewContextMenu;
@@ -81,6 +85,7 @@ public partial class SceneTreeWidget : Widget
 
 		TreeView.OnPaintOverride = () =>
 		{
+
 			Paint.ClearPen();
 			Paint.SetBrush( Theme.ControlBackground );
 			Paint.DrawRect( TreeView.LocalRect, Theme.ControlRadius );
@@ -132,6 +137,17 @@ public partial class SceneTreeWidget : Widget
 	public void CheckForChanges()
 	{
 		var session = SceneEditorSession.Active;
+		if ( Environment.GetEnvironmentVariable( "SBOX_SCENE_TREE_DEBUG" ) == "1" )
+		{
+			var debugState = $"{session is not null}/{TreeView?.Visible}/{TreeView?.Items.Count()}/{TreeView?.Size}/{TreeView?.ScreenPosition}/{Visible}/{Size}";
+			if ( debugState != _lastTreeDebugState )
+			{
+				_lastTreeDebugState = debugState;
+				System.IO.File.AppendAllText( "/tmp/sbox-scene-tree.log", $"[check] session={session is not null} treeVisible={TreeView?.Visible} items={TreeView?.Items.Count()} treeSize={TreeView?.Size} treeScreen={TreeView?.ScreenPosition} parentVisible={Visible} parentSize={Size}{Environment.NewLine}" );
+			}
+		}
+
+
 		if ( session is null )
 			return;
 
@@ -145,6 +161,13 @@ public partial class SceneTreeWidget : Widget
 
 		queryDirty = false;
 		Rebuild();
+	}
+
+	[Event( "scene.session.active" )]
+	public void OnSessionActive( SceneEditorSession session )
+	{
+		_lastScene.SetTarget( null );
+		CheckForChanges();
 	}
 
 	private void Rebuild()
@@ -223,11 +246,13 @@ public partial class SceneTreeWidget : Widget
 			if ( scene is PrefabScene prefabScene )
 			{
 				var node = TreeView.AddItem( new PrefabNode( prefabScene ) );
+				node.InternalBuildChildren();
 				TreeView.Open( node );
 			}
 			else
 			{
 				var node = TreeView.AddItem( new SceneNode( scene ) );
+				node.InternalBuildChildren();
 				TreeView.Open( node );
 			}
 		}
@@ -245,6 +270,10 @@ public partial class SceneTreeWidget : Widget
 				TreeView.Selection.Add( go );
 			}
 		}
+
+		TreeView.UpdateIfDirty();
+		if ( Environment.GetEnvironmentVariable( "SBOX_SCENE_TREE_DEBUG" ) == "1" )
+			System.IO.File.AppendAllText( "/tmp/sbox-scene-tree.log", $"[rebuild] items={TreeView.Items.Count()} rootChildren={TreeView.Items.OfType<TreeNode>().FirstOrDefault()?.Children.Count() ?? -1} sceneChildren={scene.Children.Count()} allObjects={scene.GetAllObjects( false ).Count()} visible={TreeView.Visible} size={TreeView.Size} screen={TreeView.ScreenPosition}{Environment.NewLine}" );
 	}
 
 	public void OnInspect( EditorUtility.OnInspectArgs args )

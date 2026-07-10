@@ -545,19 +545,6 @@ internal class ConsoleWidget : Widget
 		{
 			ThreadSafe.AssertIsMainThread();
 
-			var lastEvent = Events.LastOrDefault();
-			if ( lastEvent.Message == e.Message && lastEvent.Logger == e.Logger && lastEvent.Stack == e.Stack )
-			{
-				e.Repeats = lastEvent.Repeats + 1;
-
-				var cursor = GetCursorAtBlock( Events.Count() - 1 );
-				cursor.SelectBlockUnderCursor();
-				cursor.RemoveSelectedText();
-				cursor.deleteChar();
-				(cursor as IDisposable).Dispose();
-
-				Events.RemoveAt( Events.Count() - 1 );
-			}
 
 			var textcolor = "#ccc";
 

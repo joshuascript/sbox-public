@@ -29,9 +29,9 @@ public record DiskLocation : LocalAssetBrowser.Location
 				Icon = "Folder";
 				Type = LocalAssetBrowser.LocationType.Assets;
 			}
-			else if ( v.Contains( "/addons/citizen/assets" ) )
+			else if ( v.Contains( "/addons/citizen/assets", StringComparison.OrdinalIgnoreCase ) )
 			{
-				RootPath = FileSystem.Root.GetFullPath( "/addons/citizen/assets/" );
+				RootPath = FileSystem.Root.GetFullPath( "/addons/citizen/Assets/" );
 				RootTitle = "Citizen";
 				Icon = "face";
 				Type = LocalAssetBrowser.LocationType.Assets;

@@ -23,8 +23,11 @@ public static class Launcher
 		if ( !HasCommandLineSwitch( "-project" ) && !HasCommandLineSwitch( "-test" ) )
 		{
 			// we pass the command line, so we can pass it on to the sbox-launcher (for -game etc)
-			ProcessStartInfo info = new ProcessStartInfo( "sbox-launcher.exe", Environment.CommandLine );
-			info.UseShellExecute = true;
+		var launcherName = OperatingSystem.IsWindows() ? "sbox-launcher.exe" : "sbox-launcher";
+		if ( !OperatingSystem.IsWindows() )
+			launcherName = System.IO.Path.Combine( Environment.CurrentDirectory, launcherName );
+		ProcessStartInfo info = new ProcessStartInfo( launcherName, Environment.CommandLine );
+			info.UseShellExecute = OperatingSystem.IsWindows();
 			info.CreateNoWindow = true;
 			info.WorkingDirectory = System.Environment.CurrentDirectory;
 

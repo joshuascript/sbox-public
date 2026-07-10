@@ -57,6 +57,11 @@ public sealed class WebSurface : IDisposable
 		}
 	}
 
+	static string StringFromCallback( IntPtr ptr )
+	{
+		return ptr == IntPtr.Zero ? null : Helpers.MemoryToString( ptr );
+	}
+
 	public delegate void TextureChangedDelegate( ReadOnlySpan<byte> span, Vector2 size );
 
 	/// <summary>
@@ -254,7 +259,7 @@ public sealed class WebSurface : IDisposable
 
 	private void OnChangedTitle( HTML_ChangedTitle_t x )
 	{
-		PageTitle = x.PchTitle;
+		PageTitle = StringFromCallback( x.PchTitle );
 	}
 
 	/// <summary>
@@ -263,8 +268,12 @@ public sealed class WebSurface : IDisposable
 	/// <param name="r"></param>
 	private unsafe void OnStartRequest( HTML_StartRequest_t r )
 	{
-		var url = r.PchURL;
-
+		var url = StringFromCallback( r.PchURL );
+		if ( string.IsNullOrEmpty( url ) )
+		{
+			steamHTMLSurface.AllowStartRequest( BrowserId, false );
+			return;
+		}
 		try
 		{
 			if ( IsLimited )
@@ -287,14 +296,13 @@ public sealed class WebSurface : IDisposable
 	/// <param name="x"></param>
 	private unsafe void OnURLChanged( HTML_URLChanged_t x )
 	{
-		currentUrl = x.PchURL;
+		currentUrl = StringFromCallback( x.PchURL );
 	}
-
 
 	private void OnFinishedRequest( HTML_FinishedRequest_t x )
 	{
-		currentUrl = x.PchURL;
-		PageTitle = x.PchPageTitle;
+		currentUrl = StringFromCallback( x.PchURL );
+		PageTitle = StringFromCallback( x.PchPageTitle );
 	}
 
 	public string Cursor { get; private set; }

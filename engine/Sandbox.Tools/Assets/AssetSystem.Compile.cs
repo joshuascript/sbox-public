@@ -1,6 +1,7 @@
 ﻿using NativeEngine;
 using Sandbox.Resources;
 using System;
+using System.Runtime.InteropServices;
 
 namespace Editor;
 
@@ -81,6 +82,54 @@ public static partial class AssetSystem
 		}
 	}
 
+	static bool CanUseNativeResourceCompiler( string path )
+	{
+		// On Linux the Wine-backed resourcecompiler bridge handles all file-based
+		// resource types that the Windows resourcecompiler.exe supports.
+		return true;
+	}
+
+	[UnmanagedFunctionPointer( CallingConvention.Cdecl, CharSet = CharSet.Ansi )]
+	delegate int AnvilGenerateResourceFileDelegate( string path );
+
+	static bool triedLinuxResourceCompilerBridge;
+	static AnvilGenerateResourceFileDelegate linuxResourceCompilerBridge;
+
+	static bool CompileLinuxResourceWithBridge( string path )
+	{
+		if ( !OperatingSystem.IsLinux() )
+			return false;
+
+		if ( linuxResourceCompilerBridge is null && !triedLinuxResourceCompilerBridge )
+		{
+			triedLinuxResourceCompilerBridge = true;
+
+			if ( !NativeLibrary.TryLoad( "libresourcecompiler.so", out var handle ) )
+			{
+				var nativePath = System.IO.Path.GetFullPath( System.IO.Path.Combine( AppContext.BaseDirectory, "..", "linuxsteamrt64", "libresourcecompiler.so" ) );
+				NativeLibrary.TryLoad( nativePath, out handle );
+			}
+
+			if ( handle != IntPtr.Zero && NativeLibrary.TryGetExport( handle, "AnvilGenerateResourceFile", out var export ) )
+			{
+				linuxResourceCompilerBridge = Marshal.GetDelegateForFunctionPointer<AnvilGenerateResourceFileDelegate>( export );
+			}
+		}
+
+		if ( linuxResourceCompilerBridge is null )
+		{
+			log.Warning( $"Linux resource compiler bridge is unavailable; can't compile {path}" );
+			return false;
+		}
+
+		var compiled = linuxResourceCompilerBridge( path ) != 0;
+		if ( !compiled )
+			log.Warning( $"Linux resource compiler bridge failed to compile {path}" );
+
+		return compiled;
+	}
+
+
 	/// <summary>
 	/// Compile a resource from text.
 	/// </summary>
@@ -88,6 +137,12 @@ public static partial class AssetSystem
 	{
 		if ( string.IsNullOrWhiteSpace( text ) )
 			return false;
+
+		if ( !CanUseNativeResourceCompiler( path ) )
+			return false;
+
+		if ( OperatingSystem.IsLinux() )
+			return CompileLinuxResourceWithBridge( path );
 
 		return IResourceCompilerSystem.GenerateResourceFile( path, text );
 	}
@@ -99,6 +154,12 @@ public static partial class AssetSystem
 	{
 		if ( data.Length == 0 )
 			return false;
+
+		if ( !CanUseNativeResourceCompiler( path ) )
+			return false;
+
+		if ( OperatingSystem.IsLinux() )
+			return CompileLinuxResourceWithBridge( path );
 
 		fixed ( byte* dataPtr = data )
 		{

@@ -392,6 +392,9 @@ public abstract partial class Asset
 	internal virtual bool TryLoadGameResource( Type t, out GameResource obj, bool allowCreate = false )
 	{
 		obj = null;
+		if ( AssetType is null )
+			return false;
+
 
 		if ( !Game.Resources.TryGetType( AssetType.FileExtension, out var attribute ) )
 			return false;
@@ -408,6 +411,22 @@ public abstract partial class Asset
 		obj = GameResource.GetPromise( attribute.TargetType, Path );
 		if ( obj != null && !obj.IsPromise )
 			return true; // already exists and loaded
+		// ponytail: on Linux, prefer source JSON for game resources when available.
+		// The native compiled-resource reader rejects newer _c header versions
+		// (8736 != 12), so reading the binary first just wastes time and spams logs.
+		if ( System.OperatingSystem.IsLinux() && AssetType.IsGameResource )
+		{
+			var sourceFile = GetSourceFile( true );
+			if ( !string.IsNullOrWhiteSpace( sourceFile ) && System.IO.File.Exists( sourceFile ) )
+			{
+				var json = ReadJson();
+				if ( !string.IsNullOrWhiteSpace( json ) )
+				{
+					obj.LoadFromJson( json );
+					return true;
+				}
+			}
+		}
 
 		// get compiled path
 		var compiledFilePath = GetCompiledFile( true );

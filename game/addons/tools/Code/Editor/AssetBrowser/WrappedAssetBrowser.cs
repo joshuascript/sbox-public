@@ -38,4 +38,31 @@ public class WrappedAssetBrowser : Widget
 	public AssetBrowser GetBrowser( AssetEntry asset ) => GetBrowser( asset.AbsolutePath );
 
 	public void SwitchTo( Widget widget ) => Tabs.SetPage( widget );
+
+	public string GetDebugStatus()
+	{
+		return $"type={GetType().Name} visible={Visible} size={Size} local=[{BrowserDebugStatus( Local )}] cloud=[{BrowserDebugStatus( Cloud )}] mounts=[{BrowserDebugStatus( Mounts )}]";
+	}
+
+	static string BrowserDebugStatus( Widget widget )
+	{
+		if ( widget is null )
+			return "<null>";
+
+		var method = widget.GetType().GetMethod( "GetDebugStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic );
+		if ( method is not null )
+		{
+			try
+			{
+				if ( method.Invoke( widget, null ) is string status )
+					return status;
+			}
+			catch ( System.Exception e )
+			{
+				return $"type={widget.GetType().Name} debugError={e.GetType().Name}";
+			}
+		}
+
+		return $"type={widget.GetType().Name} visible={widget.Visible} size={widget.Size}";
+	}
 }

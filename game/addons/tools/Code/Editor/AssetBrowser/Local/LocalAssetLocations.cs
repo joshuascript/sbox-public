@@ -88,9 +88,12 @@ public class LocalAssetLocations : AssetLocations
 		BaseContentNode = new TreeNode.SmallHeader( "dns", "s&box" );
 
 		{
-			var d = new DirectoryInfo( FileSystem.Root.GetFullPath( "/addons/citizen/assets/" ) );
-			var loc = new DiskLocation( d );
-			BaseContentNode.AddItem( new FolderNode( loc ) );
+			var d = new DirectoryInfo( FileSystem.Root.GetFullPath( "/addons/citizen/Assets/" ) );
+			if ( d.Exists )
+			{
+				var loc = new DiskLocation( d );
+				BaseContentNode.AddItem( new FolderNode( loc ) );
+			}
 		}
 
 		{

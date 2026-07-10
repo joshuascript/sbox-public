@@ -356,9 +356,6 @@ public class AssetType
 
 			old = AssetTypeCache.Values.FirstOrDefault( x => x.FileExtension == attribute.Extension );
 
-			// should exist now we registered. This engine authoritive shit should die in a fire.
-			Assert.NotNull( old );
-
 			if ( old is null )
 				return false;
 		}

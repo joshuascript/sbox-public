@@ -11,6 +11,9 @@ internal class FileAssociations
 	/// </summary>
 	internal static void Create()
 	{
+		if ( !OperatingSystem.IsWindows() )
+			return;
+
 		var sboxExeFilePath = $"\"{FileSystem.Root.GetFullPath( "sbox-dev.exe" )}\"";
 
 		try

@@ -294,7 +294,7 @@ public class CloudAsset
 			}
 		}
 
-		var gr = AssetSystem.All.Where( x => x.AssetType.IsGameResource && (!currentProjectOnly || validAssetPaths.Any( path => x.AbsolutePath.StartsWith( path, StringComparison.OrdinalIgnoreCase ) )) );
+		var gr = AssetSystem.All.Where( x => x.AssetType?.IsGameResource == true && (!currentProjectOnly || (!string.IsNullOrWhiteSpace( x.AbsolutePath ) && validAssetPaths.Any( path => x.AbsolutePath.StartsWith( path, StringComparison.OrdinalIgnoreCase ) ))) );
 		foreach ( var r in gr )
 		{
 			string json = null;
@@ -323,7 +323,7 @@ public class CloudAsset
 			}
 		}
 
-		var nativeResources = AssetSystem.All.Where( x => !x.AssetType.IsGameResource && (!currentProjectOnly || validAssetPaths.Any( path => x.AbsolutePath.StartsWith( path, StringComparison.OrdinalIgnoreCase ) )) ).ToArray();
+		var nativeResources = AssetSystem.All.Where( x => x.AssetType is not null && !x.AssetType.IsGameResource && (!currentProjectOnly || (!string.IsNullOrWhiteSpace( x.AbsolutePath ) && validAssetPaths.Any( path => x.AbsolutePath.StartsWith( path, StringComparison.OrdinalIgnoreCase ) ))) ).ToArray();
 		foreach ( var r in nativeResources )
 		{
 			var config = r?.Publishing?.ProjectConfig;

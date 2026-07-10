@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using NativeEngine;
 using Sandbox.VR;
 
@@ -21,9 +23,20 @@ public class ComputeShader
 	/// </summary>
 	public ComputeShader( string path )
 	{
-		var material = Material.FromShader( path );
+		var material = Material.FromShader( NormalizePath( path ) );
 		Assert.NotNull( material );
 		ComputeMaterial = material;
+	}
+
+	static string NormalizePath( string path )
+	{
+		if ( Path.HasExtension( path ) )
+			return path;
+
+		if ( !path.StartsWith( "shaders/", StringComparison.OrdinalIgnoreCase ) )
+			path = $"shaders/{path}";
+
+		return $"{path}.shader";
 	}
 
 	internal void Destroy()

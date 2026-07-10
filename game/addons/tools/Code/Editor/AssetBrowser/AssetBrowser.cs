@@ -411,7 +411,7 @@ public partial class AssetBrowser : Widget, IBrowser, AssetSystem.IEventListener
 		var tagCounts = new Dictionary<string, int>();
 
 
-		await Task.Run( () =>
+		void CollectItems()
 		{
 			//
 			// Collect directories
@@ -503,8 +503,17 @@ public partial class AssetBrowser : Widget, IBrowser, AssetSystem.IEventListener
 					}
 				}
 			}
-		}, token );
+		}
 
+		if ( !recursive && Search.IsEmpty )
+			CollectItems();
+		else
+			await Task.Run( CollectItems, token );
+
+		if ( token.IsCancellationRequested )
+			return false;
+
+		await MainThread.Wait();
 		if ( token.IsCancellationRequested )
 			return false;
 
@@ -788,6 +797,33 @@ public partial class AssetBrowser : Widget, IBrowser, AssetSystem.IEventListener
 			{
 				AssetList.SelectItem( item );
 			}
+		}
+	}
+
+	public string GetDebugStatus()
+	{
+		var locationItems = AssetLocations?.Items?.Count() ?? -1;
+		var listItems = AssetList?.Items?.Count() ?? -1;
+		var selectedItems = AssetList?.Selection?.Count ?? -1;
+		var refreshStatus = RefreshTask?.Status.ToString() ?? "<none>";
+		var activeTags = Search?.AssetTypes?.ActiveTags is null ? "<null>" : string.Join( ",", Search.AssetTypes.ActiveTags );
+		var excludedTags = Search?.AssetTypes?.ExcludedTags is null ? "<null>" : string.Join( ",", Search.AssetTypes.ExcludedTags );
+		var chipCount = Chips?.Chips?.Count() ?? -1;
+		var activeChipCount = Chips?.Active?.Count ?? -1;
+		var rawDirCount = CountForDebug( () => CurrentLocation?.GetDirectories()?.Take( 1000 ).Count() ?? -1 );
+		var rawFileCount = CountForDebug( () => CurrentLocation?.GetFiles()?.Take( 1000 ).Count() ?? -1 );
+		return $"type={GetType().Name} visible={Visible} size={Size} locations={locationItems} listItems={listItems} selected={selectedItems} currentLocation={CurrentLocation?.Path ?? "<null>"} valid={CurrentLocation?.IsValid().ToString() ?? "<null>"} rawDirs={rawDirCount} rawFiles={rawFileCount} refresh={refreshStatus} hideNonAssets={HideNonAssets} recursive={ShowRecursiveFiles} search='{Search?.Value ?? "<null>"}' query='{Search?.Query ?? "<null>"}' activeTags='{activeTags}' excludedTags='{excludedTags}' chips={chipCount} activeChips={activeChipCount} assetListVisible={AssetList?.Visible.ToString() ?? "<null>"} assetListSize={AssetList?.Size.ToString() ?? "<null>"}";
+	}
+
+	static int CountForDebug( System.Func<int> getCount )
+	{
+		try
+		{
+			return getCount();
+		}
+		catch
+		{
+			return -2;
 		}
 	}
 

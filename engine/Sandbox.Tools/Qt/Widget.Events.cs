@@ -369,7 +369,7 @@ namespace Editor
 		internal bool InternalPaintEvent( QPainter e, int flags )
 		{
 			if ( !e.IsValid )
-				return false;
+				return true;
 
 			skipDraw = true;
 

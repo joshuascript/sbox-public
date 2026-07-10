@@ -35,7 +35,7 @@ namespace Editor
 			var geo = EditorCookie.GetString( $"Window.{StateCookie}.Geometry", null );
 
 			if ( geo != null ) RestoreGeometry( geo );
-			if ( state != null ) RestoreState( state );
+			if ( state != null && !(System.OperatingSystem.IsLinux() && StateCookie == "SboxSceneEditor") ) RestoreState( state );
 		}
 
 		/// <summary>

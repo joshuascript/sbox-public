@@ -6,6 +6,8 @@
 internal class LocalFileSystem : BaseFileSystem
 {
 	Zio.FileSystems.PhysicalFileSystem Physical { get; }
+	protected override bool UseManagedWatcher => true;
+
 
 	internal LocalFileSystem( string rootFolder, bool makereadonly = false )
 	{
@@ -24,7 +26,7 @@ internal class LocalFileSystem : BaseFileSystem
 		}
 
 		var rootPath = Physical.ConvertPathFromInternal( rootFolder );
-		system = new Zio.FileSystems.SubFileSystem( Physical, rootPath );
+		system = new Zio.FileSystems.SubFileSystem( Physical, rootPath, owned: false, isCaseSensitive: false );
 
 		if ( makereadonly )
 		{
@@ -37,5 +39,11 @@ internal class LocalFileSystem : BaseFileSystem
 		base.Dispose();
 
 		Physical?.Dispose();
+	}
+
+	protected override void OnExternalFileChanged()
+	{
+		if ( Physical is CaseInsensitivePhysicalFileSystem caseInsensitive )
+			caseInsensitive.InvalidateCache();
 	}
 }

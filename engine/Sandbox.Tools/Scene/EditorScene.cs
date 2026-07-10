@@ -44,13 +44,17 @@ public static class EditorScene
 			Title = "Open",
 			Directory = Project.Current.GetAssetsPath()
 		};
-		fd.SetNameFilter( "(*.scene; *.prefab)" );
+		fd.SetNameFilter( "Scenes (*.scene *.prefab)" );
+		fd.SetFindExistingFile();
+		fd.SetModeOpen();
 
 		if ( !fd.Execute() ) return;
 
-		var asset = AssetSystem.FindByPath( fd.SelectedFile );
+		var path = fd.SelectedFile;
+		if ( AssetSystem.FindByPath( path ) is { } asset )
+			path = asset.RelativePath;
 
-		var session = SceneEditorSession.CreateFromPath( asset.RelativePath );
+		var session = SceneEditorSession.CreateFromPath( path );
 
 		if ( session is null )
 		{

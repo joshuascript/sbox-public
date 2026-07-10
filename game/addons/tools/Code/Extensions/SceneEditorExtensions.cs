@@ -22,8 +22,9 @@ public static class SceneEditorExtensions
 		}
 
 		self.Input.CursorPosition = Application.CursorPosition;
-		self.Input.LeftMouse = Application.MouseButtons.HasFlag( MouseButtons.Left );
-		self.Input.RightMouse = Application.MouseButtons.HasFlag( MouseButtons.Right );
+		var mouseButtons = GetMouseButtons( canvas );
+		self.Input.LeftMouse = mouseButtons.HasFlag( MouseButtons.Left );
+		self.Input.RightMouse = mouseButtons.HasFlag( MouseButtons.Right );
 
 		if ( canvas.IsValid() )
 		{
@@ -66,6 +67,54 @@ public static class SceneEditorExtensions
 		return (float)Math.Round( value / step ) * step;
 	}
 
+	private static MouseButtons GetMouseButtons( Widget canvas )
+	{
+		return canvas is SceneRenderingWidget renderer
+			? renderer.MouseButtons
+			: Application.MouseButtons;
+	}
+
+	private static bool IsKeyDown( string shortcut, KeyCode key )
+	{
+		return EditorShortcuts.IsDown( shortcut ) || (System.OperatingSystem.IsLinux() && Application.IsKeyDown( key ));
+	}
+
+	private static Vector2 ConsumeMouseDelta( Widget canvas )
+	{
+		if ( canvas is SceneRenderingWidget renderer )
+		{
+			var delta = renderer.ConsumeMouseDelta();
+			var polledDelta = renderer.ConsumePolledMouseDelta( renderer.FromScreen( Application.CursorPosition ), renderer.MouseButtons != MouseButtons.None );
+			if ( !delta.IsNearZeroLength )
+				return delta / Application.DpiScale;
+
+			if ( !polledDelta.IsNearZeroLength )
+				return polledDelta;
+		}
+
+		var cursorDelta = Application.CursorDelta;
+		if ( !System.OperatingSystem.IsLinux() || !cursorDelta.IsNearZeroLength )
+			return cursorDelta;
+
+		var mouseDelta = Sandbox.Mouse.Delta;
+		return !mouseDelta.IsNearZeroLength ? mouseDelta : Sandbox.Input.MouseDelta;
+	}
+
+	private static Vector2 ConsumeMouseWheelDelta( Widget canvas )
+	{
+		if ( canvas is SceneRenderingWidget renderer )
+		{
+			var delta = renderer.ConsumeMouseWheelDelta();
+			if ( delta.x != 0.0f || delta.y != 0.0f )
+				return delta;
+		}
+
+		var wheel = Application.MouseWheelDelta;
+		return System.OperatingSystem.IsLinux() && wheel.x == 0.0f && wheel.y == 0.0f
+			? Sandbox.Input.MouseWheel
+			: wheel;
+	}
+
 	/// <summary>
 	/// Helper to easily set up all of the inputs for this camera and widget. This is assuming
 	/// that the passed in widget is the render panel.
@@ -79,15 +128,21 @@ public static class SceneEditorExtensions
 		var cameraVelocity = self.GetValue<Vector3>( "CameraVelocity" );
 
 		bool moved = false;
-		var rightMouse = Application.MouseButtons.HasFlag( MouseButtons.Right );
-		var middleMouse = Application.MouseButtons.HasFlag( MouseButtons.Middle );
+		var mouseButtons = GetMouseButtons( canvas );
+		var rightMouse = mouseButtons.HasFlag( MouseButtons.Right );
+		var middleMouse = mouseButtons.HasFlag( MouseButtons.Middle );
+		var mouseWheelDelta = ConsumeMouseWheelDelta( canvas );
+		var cursorDelta = ConsumeMouseDelta( canvas );
+		var lookMouse = rightMouse;
+		var panMouse = middleMouse;
 
-		if ( ((rightMouse && !camera.Orthographic) || middleMouse) && self.Input.IsHovered )
+
+		if ( ((lookMouse && !camera.Orthographic) || panMouse) && self.Input.IsHovered )
 		{
 			EditorShortcuts.AllowShortcuts = false;
 			canvas.Focus();
 
-			var delta = Application.CursorDelta * 0.1f;
+			var delta = cursorDelta * 0.1f;
 
 			if ( lockCursor && LockCursorToCanvas( canvas ) )
 				delta = Vector2.Zero;
@@ -103,13 +158,14 @@ public static class SceneEditorExtensions
 
 			var moveSpeed = EditorPreferences.CameraSpeed;
 
-			if ( EditorShortcuts.IsDown( "scene.movement-quick" ) ) moveSpeed *= 8.0f;
-			if ( EditorShortcuts.IsDown( "scene.movement-slow" ) ) moveSpeed /= 8.0f;
+			var modifiers = Application.KeyboardModifiers;
+			if ( EditorShortcuts.IsDown( "scene.movement-quick" ) || (System.OperatingSystem.IsLinux() && modifiers.HasFlag( KeyboardModifiers.Shift )) ) moveSpeed *= 8.0f;
+			if ( EditorShortcuts.IsDown( "scene.movement-slow" ) || (System.OperatingSystem.IsLinux() && modifiers.HasFlag( KeyboardModifiers.Ctrl )) ) moveSpeed /= 8.0f;
 
-			if ( rightMouse && !camera.Orthographic )
+			if ( lookMouse && !camera.Orthographic )
 			{
 				// adjust camera speed with scroll wheel
-				if ( Application.MouseWheelDelta.y != 0.0f )
+				if ( mouseWheelDelta.y != 0.0f )
 				{
 					var currentSpeed = EditorPreferences.CameraSpeed;
 
@@ -118,7 +174,7 @@ public static class SceneEditorExtensions
 									   (currentSpeed < 20.0f) ? 1.0f :
 									   RoundToNearest( currentSpeed * 0.1f, 2.5f );
 
-					currentSpeed += adjustment * Math.Sign( Application.MouseWheelDelta.y );
+					currentSpeed += adjustment * Math.Sign( mouseWheelDelta.y );
 					currentSpeed = Math.Clamp( currentSpeed, 0.25f, 100.0f );
 
 					EditorPreferences.CameraSpeed = currentSpeed;
@@ -142,7 +198,7 @@ public static class SceneEditorExtensions
 				else
 					canvas.PixmapCursor = EyeCursor;
 			}
-			else if ( middleMouse )
+			else if ( panMouse )
 			{
 				cameraVelocity = default;
 				cameraTarget = default;
@@ -152,8 +208,8 @@ public static class SceneEditorExtensions
 				float zoomModifierY = camera.Orthographic ? camera.OrthographicHeight / canvas.Height : 2.0f;
 				float zoomModifierX = camera.Orthographic ? (camera.OrthographicHeight * (canvas.Size.x / canvas.Size.y)) / canvas.Width : 2.0f;
 
-				positionChange += camera.WorldRotation.Right * Application.CursorDelta.x * zoomModifierX;
-				positionChange += camera.WorldRotation.Down * Application.CursorDelta.y * zoomModifierY;
+				positionChange += camera.WorldRotation.Right * cursorDelta.x * zoomModifierX;
+				positionChange += camera.WorldRotation.Down * cursorDelta.y * zoomModifierY;
 
 				if ( !EditorPreferences.CameraInvertPan )
 					positionChange = -positionChange;
@@ -168,12 +224,12 @@ public static class SceneEditorExtensions
 
 			var move = Vector3.Zero;
 
-			if ( EditorShortcuts.IsDown( "scene.move-forward" ) ) move += camera.WorldRotation.Forward;
-			if ( EditorShortcuts.IsDown( "scene.move-backward" ) ) move += camera.WorldRotation.Backward;
-			if ( EditorShortcuts.IsDown( "scene.move-left" ) ) move += camera.WorldRotation.Left;
-			if ( EditorShortcuts.IsDown( "scene.move-right" ) ) move += camera.WorldRotation.Right;
-			if ( EditorShortcuts.IsDown( "scene.move-down" ) ) move += Vector3.Down;
-			if ( EditorShortcuts.IsDown( "scene.move-up" ) ) move += Vector3.Up;
+			if ( IsKeyDown( "scene.move-forward", KeyCode.W ) ) move += camera.WorldRotation.Forward;
+			if ( IsKeyDown( "scene.move-backward", KeyCode.S ) ) move += camera.WorldRotation.Backward;
+			if ( IsKeyDown( "scene.move-left", KeyCode.A ) ) move += camera.WorldRotation.Left;
+			if ( IsKeyDown( "scene.move-right", KeyCode.D ) ) move += camera.WorldRotation.Right;
+			if ( IsKeyDown( "scene.move-down", KeyCode.Q ) ) move += Vector3.Down;
+			if ( IsKeyDown( "scene.move-up", KeyCode.E ) ) move += Vector3.Up;
 
 			if ( !move.IsNearZeroLength )
 			{
@@ -200,7 +256,7 @@ public static class SceneEditorExtensions
 			//}
 		}
 
-		if ( self.Input.IsHovered && !rightMouse && Math.Abs( Application.MouseWheelDelta.y ) > 0.001f )
+		if ( self.Input.IsHovered && !lookMouse && Math.Abs( mouseWheelDelta.y ) > 0.001f )
 		{
 			const float zoomSpeed = 24.0f;
 			if ( camera.Orthographic )
@@ -208,7 +264,7 @@ public static class SceneEditorExtensions
 				var canvasCursor = Application.CursorPosition - canvas.ScreenPosition;
 				Vector3 worldBefore = camera.ScreenToWorld( canvasCursor );
 
-				camera.OrthographicHeight -= Application.MouseWheelDelta.y * zoomSpeed * 2 * (camera.OrthographicHeight / canvas.Height);
+				camera.OrthographicHeight -= mouseWheelDelta.y * zoomSpeed * 2 * (camera.OrthographicHeight / canvas.Height);
 				camera.OrthographicHeight = camera.OrthographicHeight.Clamp( 32.0f, 8192.0f );
 
 				Vector3 worldAfter = camera.ScreenToWorld( canvasCursor );
@@ -216,7 +272,7 @@ public static class SceneEditorExtensions
 			}
 			else
 			{
-				camera.WorldPosition += camera.WorldRotation.Forward * Application.MouseWheelDelta.y * zoomSpeed;
+				camera.WorldPosition += camera.WorldRotation.Forward * mouseWheelDelta.y * zoomSpeed;
 			}
 
 			cameraTarget = default;
@@ -248,8 +304,9 @@ public static class SceneEditorExtensions
 	/// </summary>
 	public static bool OrbitCamera( this Gizmo.Instance self, CameraComponent camera, Widget canvas, ref float distance )
 	{
-		var leftMouse = Application.MouseButtons.HasFlag( MouseButtons.Left );
-		var rightMouse = Application.MouseButtons.HasFlag( MouseButtons.Right );
+		var mouseButtons = GetMouseButtons( canvas );
+		var leftMouse = mouseButtons.HasFlag( MouseButtons.Left );
+		var rightMouse = mouseButtons.HasFlag( MouseButtons.Right );
 
 		if ( !self.Input.IsHovered )
 			return false;
@@ -262,7 +319,7 @@ public static class SceneEditorExtensions
 
 		canvas.Focus();
 
-		var delta = Application.CursorDelta * 0.1f;
+		var delta = ConsumeMouseDelta( canvas ) * 0.1f;
 		var angles = camera.WorldRotation.Angles();
 
 		if ( LockCursorToCanvas( canvas ) )

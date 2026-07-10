@@ -23,7 +23,23 @@ public static class GlobalToolsNamespace
 		get => field ??= new CookieContainer( "project", true, new MemoryFileSystem() );
 		internal set;
 	}
-	public static Sandbox.Bind.BindSystem BindSystem { get; internal set; }
+	/// <summary>
+	/// Until the editor boots and installs the real system, fall back to a default
+	/// so binds work during early startup (e.g. dock restoration before InitStart runs).
+	/// </summary>
+	public static Sandbox.Bind.BindSystem BindSystem
+	{
+		get => field ??= CreateDefaultBindSystem();
+		internal set;
+	}
+
+	static Sandbox.Bind.BindSystem CreateDefaultBindSystem()
+	{
+		var bs = new Sandbox.Bind.BindSystem( "Tools" );
+		bs.ThrottleUpdates = true;
+		bs.CatchExceptions = true;
+		return bs;
+	}
 	//public static HashSet<IPanel> RootPanels => IPanel.GetAllRootPanels();
 	//public static AudioSystem Audio { get; internal set; } = new AudioSystem( false );
 	public static TypeLibrary EditorTypeLibrary { get; internal set; }

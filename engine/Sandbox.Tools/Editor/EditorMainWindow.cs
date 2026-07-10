@@ -105,6 +105,9 @@ public class EditorMainWindow : DockWindow
 	private Option undoOption;
 	private Option redoOption;
 	private Option gameMode;
+	private ToolBar mainToolbar;
+	private Option playToolbarOption;
+	private bool raiseHierarchyWhenVisible;
 
 	internal EditorMainWindow()
 	{
@@ -167,6 +170,22 @@ public class EditorMainWindow : DockWindow
 
 			gameMenu.AddSeparator();
 		}
+
+		{
+			mainToolbar = new ToolBar( this, "Main" );
+			mainToolbar.Movable = false;
+			mainToolbar.Floatable = false;
+			mainToolbar.ButtonStyle = ToolButtonStyle.TextBesideIcon;
+			mainToolbar.SetIconSize( new Vector2( 22, 22 ) );
+
+			playToolbarOption = mainToolbar.AddOption( "Play", "play_arrow", EditorScene.TogglePlay );
+			playToolbarOption.ShortcutName = "editor.toggle-play";
+			playToolbarOption.ToolTip = "Play / Stop (F5)";
+			playToolbarOption.StatusTip = "Play or stop the active scene.";
+
+			AddToolBar( mainToolbar, ToolbarPosition.Top );
+		}
+
 
 		{
 			MenuBar.AddMenu( "Scene" );
@@ -340,6 +359,55 @@ public class EditorMainWindow : DockWindow
 		// We need this for focusing and relative mouse capture mode
 		NativeEngine.InputSystem.RegisterWindowWithSDL( _widget.winId() );
 		NativeEngine.InputSystem.SetEditorMainWindow( _widget.winId() );
+		LogStartupUiDiagnostics();
+	}
+
+
+	void LogStartupUiDiagnostics()
+	{
+		if ( !System.OperatingSystem.IsLinux() )
+			return;
+
+		var session = SceneEditorSession.Active;
+		var sceneObjectCount = session?.Scene?.GetAllObjects( false ).Count() ?? 0;
+		var hierarchy = DockDebugStatus( "Hierarchy" );
+		var inspector = DockDebugStatus( "Inspector" );
+		var assetBrowser = DockDebugStatus( "Asset Browser 2", "Asset Browser" );
+
+		Log.Info( $"[anvil-ui] assets={AssetSystem.All.Count()} sceneObjects={sceneObjectCount} selection={session?.Selection?.Count ?? 0} hierarchy=[{hierarchy}] inspector=[{inspector}] assetBrowser=[{assetBrowser}]" );
+	}
+
+	string DockDebugStatus( params string[] names )
+	{
+		Widget widget = null;
+		var name = "";
+		foreach ( var candidate in names )
+		{
+			widget = DockManager.GetDockWidget( candidate );
+			if ( widget is not null )
+			{
+				name = candidate;
+				break;
+			}
+		}
+		if ( widget is null )
+			return "missing";
+
+		var method = widget.GetType().GetMethod( "GetDebugStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic );
+		if ( method is not null )
+		{
+			try
+			{
+				if ( method.Invoke( widget, null ) is string status )
+					return status;
+			}
+			catch ( System.Exception e )
+			{
+				return $"type={widget.GetType().Name} debugError={e.GetType().Name}";
+			}
+		}
+
+		return $"type={widget.GetType().Name} visible={widget.Visible} size={widget.Size}";
 	}
 
 	record struct LayoutFile( string Name, string Json );
@@ -368,7 +436,25 @@ public class EditorMainWindow : DockWindow
 	void OnDockLayoutLoaded()
 	{
 		SceneEditorSession.OnEditorWindowRestoreLayout();
+
+		if ( System.OperatingSystem.IsLinux() )
+		{
+			DockConsoleBelowAssetBrowser();
+			raiseHierarchyWhenVisible = true;
+		}
 	}
+
+	void DockConsoleBelowAssetBrowser()
+	{
+		var assetBrowser = DockManager.GetDockWidget( "Asset Browser 2" ) ?? DockManager.GetDockWidget( "Asset Browser" );
+		var console = DockManager.GetDockWidget( "Console" );
+		if ( assetBrowser is null || console is null )
+			return;
+
+		DockManager.AddDock( assetBrowser, console, DockArea.Bottom, split: 0.35f );
+	}
+
+
 
 	/// <summary>
 	/// Called when the console key is pressed while the game is focused. Should
@@ -486,7 +572,16 @@ public class EditorMainWindow : DockWindow
 		{
 			EditorWindow.Enabled = true;
 			EditorWindow.Visible = true;
+			if ( System.OperatingSystem.IsLinux() && EditorWindow.IsMinimized )
+				EditorWindow.MakeWindowed();
 			EditorWindow.Focus();
+			if ( raiseHierarchyWhenVisible )
+			{
+				raiseHierarchyWhenVisible = false;
+				DockManager.RaiseDock( "Hierarchy" );
+				if ( SceneEditorSession.Active is not null )
+					EditorEvent.Run( "scene.session.active", SceneEditorSession.Active );
+			}
 		}
 		else
 		{

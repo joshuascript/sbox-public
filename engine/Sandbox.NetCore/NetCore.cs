@@ -27,7 +27,8 @@ internal static class NetCore
 		//
 
 		var gameFolder = Marshal.PtrToStringUTF8( gameFolderPtr );
-		var managedFolder = $"{gameFolder}\\bin\\managed\\";
+		var separator = System.OperatingSystem.IsWindows() ? "\\" : "/";
+		var managedFolder = $"{gameFolder}{separator}bin{separator}managed{separator}";
 
 		var assembly = Assembly.LoadFrom( $"{managedFolder}Sandbox.Engine.dll" );
 		var type = assembly.GetTypes().Where( x => x.Name == "NetCore" ).FirstOrDefault();

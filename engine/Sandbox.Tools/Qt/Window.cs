@@ -121,8 +121,10 @@ namespace Editor
 
 			var isMainWindow = this is EditorMainWindow;
 			var titleBar = new TitleBar( this, isMainWindow );
-			titleBar.SetTitleBarWidgets( _nativeWindow );
-			MenuWidget = titleBar;
+		titleBar.SetTitleBarWidgets( _nativeWindow );
+		// TitleBar contains the MenuBar (File, Edit, View, etc.) — must stay visible.
+		// The native WM title bar is handled by the frameless window flags in ManagedMainWindow.
+		MenuWidget = titleBar;
 
 			DeleteOnClose = true;
 			_mainWindow.setAnimated( false );
@@ -141,7 +143,7 @@ namespace Editor
 			}
 		}
 
-		private const WindowFlags DialogWindowFlags = WindowFlags.Customized | WindowFlags.Dialog;
+		private const WindowFlags DialogWindowFlags = WindowFlags.Customized | WindowFlags.Dialog | WindowFlags.WindowTitle | WindowFlags.WindowSystemMenuHint | WindowFlags.CloseButton;
 
 		public bool IsDialog
 		{
@@ -176,13 +178,13 @@ namespace Editor
 		public override void SetWindowIcon( string name )
 		{
 			base.SetWindowIcon( name );
-			if ( MenuWidget is TitleBar tb ) tb.IconPixmap = Pixmap.FromFile( name );
+			if ( MenuWidget is TitleBar tb && tb.Visible ) tb.IconPixmap = Pixmap.FromFile( name );
 		}
 
 		public override void SetWindowIcon( Pixmap icon )
 		{
 			base.SetWindowIcon( icon );
-			if ( MenuWidget is TitleBar tb ) tb.IconPixmap = icon;
+			if ( MenuWidget is TitleBar tb && tb.Visible ) tb.IconPixmap = icon;
 		}
 
 		internal override void NativeInit( IntPtr ptr )

@@ -88,12 +88,7 @@ public static partial class EditorUtility
 	/// </summary>
 	public static void OpenFolder( string path )
 	{
-		System.Diagnostics.Process.Start( new System.Diagnostics.ProcessStartInfo()
-		{
-			FileName = path,
-			UseShellExecute = true,
-			Verb = "open",
-		} );
+		OpenWithDesktop( path );
 	}
 
 	/// <summary>
@@ -103,14 +98,9 @@ public static partial class EditorUtility
 	{
 		try
 		{
-			System.Diagnostics.Process.Start( new System.Diagnostics.ProcessStartInfo()
-			{
-				FileName = path,
-				UseShellExecute = true,
-				Verb = "open",
-			} );
+			OpenWithDesktop( path );
 		}
-		catch
+		catch when ( !OperatingSystem.IsLinux() )
 		{
 			// Show "Open With" dialog
 			System.Diagnostics.Process.Start( new System.Diagnostics.ProcessStartInfo()
@@ -129,7 +119,34 @@ public static partial class EditorUtility
 	public static void OpenFileFolder( string filepath )
 	{
 		filepath = System.IO.Path.GetFullPath( filepath );
+		if ( OperatingSystem.IsLinux() )
+		{
+			OpenFolder( System.IO.File.Exists( filepath ) ? System.IO.Path.GetDirectoryName( filepath ) : filepath );
+			return;
+		}
+
 		System.Diagnostics.Process.Start( "explorer.exe", string.Format( "/select,\"{0}\"", filepath ) );
+	}
+
+	static void OpenWithDesktop( string path )
+	{
+		if ( OperatingSystem.IsLinux() )
+		{
+			var startInfo = new System.Diagnostics.ProcessStartInfo( "xdg-open" )
+			{
+				UseShellExecute = false
+			};
+			startInfo.ArgumentList.Add( path );
+			System.Diagnostics.Process.Start( startInfo );
+			return;
+		}
+
+		System.Diagnostics.Process.Start( new System.Diagnostics.ProcessStartInfo()
+		{
+			FileName = path,
+			UseShellExecute = true,
+			Verb = "open",
+		} );
 	}
 
 	private static string GetDestinationPath( string source, string directory )

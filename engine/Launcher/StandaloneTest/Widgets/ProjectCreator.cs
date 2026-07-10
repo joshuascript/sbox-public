@@ -15,7 +15,6 @@ public class ProjectCreator : Dialog
 	private Checkbox SetDefaultProjectLocation;
 	private FolderEdit FolderEdit;
 	private FieldSubtitle FolderFullPath;
-	private ProjectTemplate ActiveTemplate;
 
 	private ProjectTemplates Templates;
 
@@ -40,6 +39,7 @@ public class ProjectCreator : Dialog
 
 		Layout = Layout.Row();
 		Layout.Margin = 4;
+		SetStyles( $"background-color: {Theme.SurfaceBackground.Hex};" );
 
 		// Template List
 		{
@@ -47,7 +47,7 @@ public class ProjectCreator : Dialog
 			column.Margin = 12;
 
 			column.AddSpacingCell( 8.0f );
-			column.Add( new Label.Subtitle( "Templates" ) );
+			column.Add( SectionTitle( "Templates" ) );
 			column.AddSpacingCell( 18.0f );
 
 			var templates = column.Add( new ProjectTemplates( this ) );
@@ -61,12 +61,13 @@ public class ProjectCreator : Dialog
 			body.Spacing = 8;
 
 			body.AddSpacingCell( 8.0f );
-			body.Add( new Label.Subtitle( "Project Setup" ) );
+			body.Add( SectionTitle( "Project Setup" ) );
 			body.AddSpacingCell( 12.0f );
 
 			body.Add( new FieldTitle( "Title" ) );
 			TitleEdit = body.Add( new LineEdit( "" ) { PlaceholderText = "Garry's Project" } );
 			TitleEdit.Text = DefaultProjectName();
+			StyleInput( TitleEdit );
 			TitleEdit.TextEdited += ( x ) => Validate();
 
 			body.AddSpacingCell( 8 );
@@ -74,6 +75,7 @@ public class ProjectCreator : Dialog
 			body.Add( new FieldTitle( "Ident" ) );
 			body.Add( new FieldSubtitle( "Lowercase version of addon name, no special characters" ) );
 			IdentEdit = body.Add( new LineEdit( "" ) { PlaceholderText = "garrysproject" } );
+			StyleInput( IdentEdit );
 			IdentEdit.TextEdited += ( x ) => Validate();
 			IdentEdit.TextEdited += ( x ) => identEdited = true;
 			IdentEdit.SetValidator( "[a-z0-9_]{2,32}" );
@@ -82,6 +84,7 @@ public class ProjectCreator : Dialog
 
 			body.Add( new FieldTitle( "Location" ) );
 			FolderEdit = body.Add( new FolderEdit( null ) );
+			StyleInput( FolderEdit );
 			FolderEdit.PlaceholderText = LauncherPreferences.DefaultProjectLocation.NormalizeFilename( false );
 			FolderEdit.Text = LauncherPreferences.DefaultProjectLocation.NormalizeFilename( false );
 			FolderEdit.TextEdited += ( x ) =>
@@ -129,10 +132,12 @@ public class ProjectCreator : Dialog
 			CreateGitIgnore = body.Add( new Checkbox() );
 			CreateGitIgnore.Value = true;
 			CreateGitIgnore.Text = "Create .gitignore";
+			StyleCheckbox( CreateGitIgnore );
 
 			SetDefaultProjectLocation = body.Add( new Checkbox() );
 			SetDefaultProjectLocation.Value = false;
 			SetDefaultProjectLocation.Text = "Set as Default Project Location";
+			StyleCheckbox( SetDefaultProjectLocation );
 
 			body.AddStretchCell( 1 );
 
@@ -142,18 +147,29 @@ public class ProjectCreator : Dialog
 			FolderFullPath = footer.Add( new FieldSubtitle( "" ) );
 			footer.AddStretchCell();
 
-			OkayButton = footer.Add( new Button.Primary( "Create", "add_box" ) { Clicked = CreateProject } );
+			OkayButton = footer.Add( new Button.Primary( "Create", "add_box" ) { Clicked = CreateProject, FixedWidth = 82 } );
 		}
 
-		Templates.ListView.ItemSelected += ( object item ) =>
-		{
-			ActiveTemplate = item as ProjectTemplate;
-			UpdateParentGameVisibility();
-		};
-		ActiveTemplate = Templates.ListView.SelectedItems.First() as ProjectTemplate;
 		UpdateParentGameVisibility();
 
 		Validate();
+	}
+
+	static Label.Subtitle SectionTitle( string text )
+	{
+		var label = new Label.Subtitle( text );
+		label.SetStyles( $"color: {Theme.TextLight.Hex}; font-weight: bold; font-size: 11pt;" );
+		return label;
+	}
+
+	static void StyleInput( Widget widget )
+	{
+		widget.SetStyles( $"background-color: {Theme.ControlBackground.Hex}; color: {Theme.TextControl.Hex}; border: 0px; border-radius: 3px; padding: 0px 6px; min-height: 24px;" );
+	}
+
+	static void StyleCheckbox( Checkbox checkbox )
+	{
+		checkbox.SetStyles( $"color: {Theme.Text.Hex}; spacing: 8px;" );
 	}
 
 	static string DefaultProjectName()
@@ -206,15 +222,16 @@ public class ProjectCreator : Dialog
 
 	void UpdateParentGameVisibility()
 	{
-		var type = ActiveTemplate?.AddonType;
-		var templateHasParent = !string.IsNullOrEmpty( ActiveTemplate?.ParentPackage );
+		var activeTemplate = Templates.ListView.ChosenTemplate;
+		var type = activeTemplate?.AddonType;
+		var templateHasParent = !string.IsNullOrEmpty( activeTemplate?.ParentPackage );
 
 		ParentGameRow.Visible = type is "addon" or "map" && !templateHasParent;
 
 		// Pre-populate from template if it has a ParentPackage set
 		if ( ParentGameRow.Visible && string.IsNullOrEmpty( ParentGame ) )
 		{
-			ParentGame = ActiveTemplate?.ParentPackage;
+			ParentGame = activeTemplate?.ParentPackage;
 		}
 	}
 
@@ -273,6 +290,8 @@ internal class FieldTitle : Label
 {
 	public FieldTitle( string title ) : base( title )
 	{
+		Color = Theme.Text;
+		SetStyles( $"color: {Theme.Text.Hex}; font-weight: bold;" );
 	}
 }
 
@@ -280,6 +299,8 @@ internal class FieldSubtitle : Label
 {
 	public FieldSubtitle( string title ) : base( title )
 	{
+		Color = Theme.TextLight;
+		SetStyles( $"color: {Theme.TextLight.Hex};" );
 		WordWrap = true;
 	}
 }

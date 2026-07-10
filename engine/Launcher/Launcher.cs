@@ -28,8 +28,13 @@ public static class Program
 
 		var exePath = System.Environment.ProcessPath;
 		GamePath = System.IO.Path.GetDirectoryName( exePath );
-		ManagedDllPath = $"{GamePath}\\bin\\managed\\";
-		NativeDllPath = $"{GamePath}\\bin\\win64\\";
+		var platform = OperatingSystem.IsWindows() ? "win64"
+			: OperatingSystem.IsLinux() ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "linuxsteamrtarm64" : "linuxsteamrt64")
+			: OperatingSystem.IsMacOS() ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "osxarm64" : "osx64")
+			: "win64";
+		var separator = OperatingSystem.IsWindows() ? "\\" : "/";
+		ManagedDllPath = $"{GamePath}{separator}bin{separator}managed{separator}";
+		NativeDllPath = $"{GamePath}{separator}bin{separator}{platform}{separator}";
 
 		//
 		// Allows unit tests and csproj to find the engine path.
@@ -39,7 +44,7 @@ public static class Program
 			System.Environment.SetEnvironmentVariable( "FACEPUNCH_ENGINE", GamePath, EnvironmentVariableTarget.User );
 		}
 
-		//
+		path = $"{NativeDllPath}{(OperatingSystem.IsWindows() ? ";" : ":")}{path}";
 		// Put our native dll path first so that when looking up native dlls we'll
 		// always use the ones from our folder first
 		//
@@ -64,7 +69,7 @@ public static class Program
 		var cd = System.Environment.CurrentDirectory;
 		var trim = args.Name.Split( ',' )[0];
 
-		var name = $"{ManagedDllPath}\\{trim}.dll";
+		var name = System.IO.Path.Combine( ManagedDllPath.TrimEnd( System.IO.Path.DirectorySeparatorChar ), $"{trim}.dll" );
 
 		// dlls with resources inside appear as a different name
 		name = name.Replace( ".resources.dll", ".dll" );

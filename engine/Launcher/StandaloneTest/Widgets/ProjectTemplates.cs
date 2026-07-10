@@ -13,13 +13,12 @@ internal class ProjectTemplates : Widget
 
 		ListView = new ProjectTemplatesListView( this );
 		ListView.SetSizeMode( SizeMode.Default, SizeMode.Default );
-		ListView.Layout = Layout.Row();
 
 		Layout.Add( ListView, 1 );
 	}
 }
 
-internal class ProjectTemplatesListView : ListView
+internal class ProjectTemplatesListView : Widget
 {
 	/// <summary>
 	/// The current template, used by the addon creator.
@@ -31,39 +30,52 @@ internal class ProjectTemplatesListView : ListView
 	/// </summary>
 	const string TemplatesDirectory = "/templates";
 
-	List<ProjectTemplate> Templates = new();
+	readonly List<ProjectTemplate> Templates = new();
+	readonly List<(TemplateRow Row, ProjectTemplate Template)> Rows = new();
 
 	public ProjectTemplatesListView( Widget parent ) : base( parent )
 	{
-		ItemSelected = OnItemClicked;
-		ItemSize = new Vector2( 0, 48 );
-		ItemSpacing = 4;
+		Layout = Layout.Column();
+		Layout.Spacing = 4;
+		Layout.Margin = 8;
+		SetStyles( $"background-color: {Theme.WidgetBackground.Hex};" );
 
 		FindLocalTemplates();
 
-		var orderedTemplates = Templates.OrderBy( x => x.Order ).ToList();
-		SetItems( orderedTemplates );
-
-		ChosenTemplate = orderedTemplates.FirstOrDefault();
-
-		if ( ChosenTemplate is not null )
+		foreach ( var template in Templates.OrderBy( x => x.Order ) )
 		{
-			SelectItem( ChosenTemplate );
+			AddTemplateRow( template );
 		}
 	}
 
-	public void OnItemClicked( object value )
+	void AddTemplateRow( ProjectTemplate template )
 	{
-		if ( value is ProjectTemplate pt )
+		var row = Layout.Add( new TemplateRow( template ) );
+		row.Clicked = () => SelectTemplate( template );
+
+		Rows.Add( (row, template) );
+
+		if ( ChosenTemplate is null )
+			SelectTemplate( template );
+	}
+
+	void SelectTemplate( ProjectTemplate template )
+	{
+		ChosenTemplate = template;
+
+		foreach ( var (row, rowTemplate) in Rows )
 		{
-			ChosenTemplate = pt;
+			row.Selected = rowTemplate == template;
 		}
 	}
 
 	protected void FindLocalTemplates()
 	{
 		if ( !FileSystem.Root.DirectoryExists( TemplatesDirectory ) )
+		{
+			AddFallbackTemplates();
 			return;
+		}
 
 		var directories = FileSystem.Root.FindDirectory( TemplatesDirectory );
 
@@ -84,75 +96,84 @@ internal class ProjectTemplatesListView : ListView
 
 			Templates.Add( new ProjectTemplate( addon, templateRoot ) );
 		}
+
+		if ( Templates.Count == 0 )
+			AddFallbackTemplates();
 	}
 
-	protected override void OnPaint()
+	void AddFallbackTemplates()
 	{
-		Paint.ClearPen();
-		Paint.SetBrush( Theme.WidgetBackground );
-		Paint.DrawRect( LocalRect );
-
-		// Draws the list items
-		base.OnPaint();
+		AddFallbackTemplate( "Game - Empty", "sports_esports", "The bare minimum required to create a game in s&box", "game", 0 );
+		AddFallbackTemplate( "Game - Player Controller", "directions_run", "Contains a First Person, Third Person, and Top-Down Example", "game", 1 );
+		AddFallbackTemplate( "Addon", "extension", "Create a custom addon for any game you wish to target", "addon", 2 );
+		AddFallbackTemplate( "Map", "map", "Create a map that works for most games", "map", 3 );
+		AddFallbackTemplate( "Sandbox Game Addon", "directions_car", "Create a custom entity for Sandbox Game", "addon", 4 );
 	}
 
-	protected override void PaintItem( VirtualWidget v )
+	void AddFallbackTemplate( string title, string icon, string description, string type, int order )
 	{
-		var item = v.Object;
-		var rect = v.Rect;
-
-		if ( item is not ProjectTemplate template )
-			return;
-
-		var r = rect;
-		var fg = Theme.Text;
-
-		if ( Paint.HasSelected )
-			fg = Theme.Text;
-
-		Paint.Antialiasing = true;
-		Paint.ClearPen();
-
-		Paint.SetBrush( Theme.ButtonBackground.WithAlpha( 0.1f ) );
-
-		if ( Paint.HasSelected )
-			Paint.SetBrush( Theme.SelectedBackground );
-
-		Paint.DrawRect( r, 4.0f );
-
-		if ( Paint.HasMouseOver )
+		var config = new ProjectConfig { Title = title, Type = type, Schema = 1 };
+		var template = new ProjectTemplate( config, null )
 		{
-			Paint.ClearPen();
-			Paint.SetBrush( Theme.Text.WithAlpha( 0.05f ) );
-			Paint.DrawRect( r, 4.0f );
+			Icon = icon,
+			Description = description,
+			Order = order
+		};
+
+		Templates.Add( template );
+	}
+
+	class TemplateRow : Widget
+	{
+		public Action Clicked { get; set; }
+
+		bool selected;
+		public bool Selected
+		{
+			get => selected;
+			set
+			{
+				selected = value;
+				SetStyles( $"background-color: {(selected ? Theme.SelectedBackground.Hex : Theme.WidgetBackground.Hex)}; border-radius: 4px;" );
+				Update();
+			}
 		}
 
-		Paint.Antialiasing = false;
-
-		r = r.Shrink( 8.0f );
-		Paint.SetPen( fg.WithAlpha( 0.7f ) );
-
-		var iconRect = r.Align( rect.Height - 16.0f, TextFlag.LeftCenter );
-		Paint.DrawIcon( iconRect, template.Icon, 24.0f );
-
-		Paint.SetDefaultFont();
-		Paint.SetPen( fg );
-		r = r.Shrink( rect.Height - 8.0f, 0 );
-
-		var x = Paint.DrawText( r, template.Title, TextFlag.LeftTop );
-		r.Top += x.Height + 4.0f;
-
-		// Middle bit
+		public TemplateRow( ProjectTemplate template ) : base( null )
 		{
-			if ( Paint.HasSelected )
-				Paint.SetPen( Theme.Text.WithAlpha( 1.0f ) );
-			else
-				Paint.SetPen( Theme.TextControl.WithAlpha( 0.5f ) );
+			FixedHeight = 48;
+			Cursor = CursorShape.Finger;
+			Layout = Layout.Row();
+			Layout.Margin = 8;
+			Layout.Spacing = 8;
 
-			r.Right = rect.Width;
+			var icon = Layout.Add( new IconLabel( template.Icon ) );
+			icon.IconSize = 24;
+			icon.Foreground = Theme.Text;
+			icon.FixedWidth = 36;
 
-			x = Paint.DrawText( r, template.Description, TextFlag.LeftCenter );
-			r.Left = x.Right + 4;
+			var text = Layout.AddColumn( 1 );
+			text.Spacing = 1;
+
+			var title = text.Add( new Label( template.Title ) );
+			title.SetStyles( $"color: {Theme.Text.Hex}; font-weight: bold;" );
+
+			var description = text.Add( new Label( template.Description ) );
+			description.SetStyles( $"color: {Theme.TextControl.WithAlpha( 0.65f ).Hex};" );
+
+			Selected = false;
+		}
+
+		protected override void OnMousePress( MouseEvent e )
+		{
+			if ( e.LeftMouseButton )
+			{
+				Clicked?.Invoke();
+				e.Accepted = true;
+				return;
+			}
+
+			base.OnMousePress( e );
 		}
 	}
 }

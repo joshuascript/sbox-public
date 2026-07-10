@@ -17,6 +17,7 @@ public static partial class AssetSystem
 
 	[SkipHotload] static ConcurrentDictionary<string, Asset> assetsByPath = new( StringComparer.OrdinalIgnoreCase );
 
+
 	/// <summary>
 	/// All the assets that are being tracked by the asset system. Does not include deleted assets.
 	/// </summary>
@@ -143,6 +144,8 @@ public static partial class AssetSystem
 		HasChanges = true;
 		Tick();
 
+		log.Info( $"Asset scan complete ({allAssets.Count} assets)" );
+
 		// Skip orphan pruning during startup. Custom GameResource types (e.g. .testr) are not
 		// yet registered when UpdateMods first fires (their C# assembly hasn't been compiled).
 		// Pruning here would incorrectly delete transient child assets (e.g. generated vtex_c)
@@ -178,7 +181,7 @@ public static partial class AssetSystem
 				asset.RebuildThumbnail( true );
 			}
 
-			if ( !asset.IsCompiled && asset.AssetType.IsGameResource )
+			if ( asset.CanRecompile && !asset.IsCompiled && asset.AssetType?.IsGameResource == true )
 			{
 				asset.Compile( false );
 			}
@@ -199,9 +202,14 @@ public static partial class AssetSystem
 			return null;
 
 		path = path.Replace( '\\', '/' );
-		path = path.TrimStart( '/' );
 
 		if ( assetsByPath.TryGetValue( path, out var asset ) && !asset.IsDeleted )
+		{
+			return asset;
+		}
+
+		path = path.TrimStart( '/' );
+		if ( assetsByPath.TryGetValue( path, out asset ) && !asset.IsDeleted )
 		{
 			return asset;
 		}
@@ -265,6 +273,7 @@ public static partial class AssetSystem
 		if ( !asset.IsValid ) return null;
 
 		var ret = Get( asset.GetAssetIndexInt() );
+		UpdateAsset( ret, false );
 
 		// Make sure the ResoureLibrary has proper loaded version, so that properties that target
 		// GameResources do not break child assets if child asset was not loaded with Asset.CreateUI beforehand.

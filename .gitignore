@@ -101,3 +101,8 @@ engine/TestResults/
 /game/tools
 /game/aftermath_dumps
 /game/gamecache
+
+# Agent config (not part of s&box source)
+AGENTS.md
+backlog/
+.claude/

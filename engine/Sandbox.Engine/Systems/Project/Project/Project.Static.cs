@@ -82,6 +82,8 @@ public partial class Project
 		IToolsDll.Current?.RunEvent( "compile.complete", CompileGroup );
 	}
 
+
+
 	internal static void Remove( Project project )
 	{
 		project.Dispose();

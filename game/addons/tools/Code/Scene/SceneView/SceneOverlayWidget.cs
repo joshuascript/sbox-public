@@ -11,7 +11,8 @@ public class SceneOverlayWidget : Widget
 		TranslucentBackground = true;
 		NoSystemBackground = true;
 
-		WindowFlags = WindowFlags.FramelessWindowHint | WindowFlags.Tool;
+		if ( !System.OperatingSystem.IsLinux() )
+			WindowFlags = WindowFlags.FramelessWindowHint | WindowFlags.Tool;
 
 		Active = this;
 
@@ -29,6 +30,8 @@ public class SceneOverlayWidget : Widget
 		EditorWindow.Moved += UpdateDimensions;
 
 		TransparentForMouseEvents = true;
+		if ( System.OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_BIND_LOG" ) == "1" )
+			System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-overlay-created] parent={parent?.GetType().Name} pos={Position} size={Size} translucent={TranslucentBackground} noSystemBackground={NoSystemBackground}{Environment.NewLine}" );
 	}
 
 	public override void OnDestroyed()
@@ -42,6 +45,7 @@ public class SceneOverlayWidget : Widget
 	}
 
 	int lastGeometryHash = -1;
+	int paintLogFrame;
 
 	[EditorEvent.Frame]
 	private void UpdateDimensions()
@@ -50,11 +54,15 @@ public class SceneOverlayWidget : Widget
 			return;
 
 		// this wasn't always being triggered properly when relying on widget events from the parent (causing HUGE jank)
-		int geometryHash = HashCode.Combine( Parent.ScreenPosition, Parent.Size );
+		var position = System.OperatingSystem.IsLinux() ? Vector2.Zero : Parent.ScreenPosition;
+		var size = System.OperatingSystem.IsLinux() ? new Vector2( Parent.Size.x, 48 ) : Parent.Size;
+		int geometryHash = HashCode.Combine( position, size );
 		if ( lastGeometryHash != geometryHash )
 		{
-			Position = Parent.ScreenPosition;
-			Size = Parent.Size;
+			Position = position;
+			Size = size;
+			if ( System.OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_BIND_LOG" ) == "1" )
+				System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-overlay-geometry] pos={Position} size={Size} parentScreen={Parent.ScreenPosition} parentSize={Parent.Size}{Environment.NewLine}" );
 		}
 
 		lastGeometryHash = geometryHash;
@@ -75,6 +83,12 @@ public class SceneOverlayWidget : Widget
 	protected override void OnPaint()
 	{
 		Active = this;
+		if ( System.OperatingSystem.IsLinux() &&
+			Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_BIND_LOG" ) == "1" &&
+			(++paintLogFrame <= 5 || paintLogFrame % 60 == 0) )
+		{
+			System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-overlay-paint] frame={paintLogFrame} pos={Position} size={Size} parentScreen={Parent?.ScreenPosition} parentSize={Parent?.Size}{Environment.NewLine}" );
+		}
 
 		if ( Parent is SceneViewportWidget vw )
 		{

@@ -106,6 +106,13 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 		// Remove our dummy dock, unless it's the only one open somehow
 		if ( All.Count > 1 )
 			dummy?.Destroy();
+
+
+		if ( Active is null )
+		{
+			var active = All.FirstOrDefault( x => EditorWindow.DockManager.IsDockOpen( x.SceneDock, false ) ) ?? All.FirstOrDefault();
+			active?.MakeActive( false );
+		}
 	}
 
 	void Dock()
@@ -170,6 +177,7 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 	public void MakeActive( bool bringToFront = true )
 	{
 		Active = this;
+		EditorEvent.Run( "scene.session.active", this );
 
 		if ( bringToFront && EditorWindow is not null )
 		{
@@ -477,6 +485,7 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 	/// </summary>
 	public static SceneEditorSession CreateFromPath( string path )
 	{
+		path = NormalizeResourcePath( path );
 		var resource = ResourceLibrary.Get<Resource>( path );
 
 		// Not loaded yet? It might be a mounted scene/prefab.
@@ -518,6 +527,25 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 		}
 
 		return null;
+	}
+	private static string NormalizeResourcePath( string path )
+	{
+		if ( string.IsNullOrWhiteSpace( path ) )
+			return path;
+
+		if ( AssetSystem.FindByPath( path ) is { } asset )
+			return asset.RelativePath;
+
+		path = path.Replace( '\\', '/' );
+
+		var assetsPath = Project.Current?.GetAssetsPath()?.Replace( '\\', '/' );
+		if ( string.IsNullOrWhiteSpace( assetsPath ) || !Path.IsPathRooted( path ) )
+			return path;
+
+		var relativePath = Path.GetRelativePath( assetsPath, path ).Replace( '\\', '/' );
+		return relativePath == ".." || relativePath.StartsWith( "../" ) || Path.IsPathRooted( relativePath )
+			? path
+			: relativePath;
 	}
 
 	public IEnumerable<object> GetSelection()

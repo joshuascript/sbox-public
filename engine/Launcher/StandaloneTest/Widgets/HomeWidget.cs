@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.IO;
 
 namespace Editor;
 
@@ -97,6 +98,7 @@ public class HomeWidget : Widget
 			menuRow.Add( new Button.Primary( "New Project...", "add" )
 			{
 				FixedHeight = Theme.RowHeight,
+				FixedWidth = 110,
 				Clicked = CreateProject,
 				ToolTip = $"Create a new project"
 			} );
@@ -389,10 +391,32 @@ public class HomeWidget : Widget
 
 	public void OpenProject( Project project, string args = null )
 	{
-		ProcessStartInfo info = new ProcessStartInfo( "sbox-dev.exe", $"{Environment.CommandLine} -project \"{project.ConfigFilePath}\" {args ?? ""}" );
-		info.UseShellExecute = true;
+		var executable = "sbox-dev.exe";
+		var launchArgs = $"{Environment.CommandLine} -project \"{project.ConfigFilePath}\" {args ?? ""}";
+		var workingDirectory = Environment.CurrentDirectory;
+		var useAnvilLauncher = false;
+
+		if ( !OperatingSystem.IsWindows() )
+		{
+			var gameDir = Path.GetDirectoryName( Environment.ProcessPath )!;
+			var repoRoot = Directory.GetParent( gameDir )?.FullName ?? gameDir;
+			var anvilLauncher = Path.Combine( repoRoot, "anvil", "launch-sbox.sh" );
+
+			useAnvilLauncher = File.Exists( anvilLauncher );
+			executable = useAnvilLauncher ? "bash" : Path.Combine( gameDir, "sbox-dev" );
+			launchArgs = useAnvilLauncher
+				? $"\"{anvilLauncher}\" -project \"{project.ConfigFilePath}\" {args ?? ""}"
+				: $"-project \"{project.ConfigFilePath}\" {args ?? ""}";
+			workingDirectory = useAnvilLauncher ? repoRoot : Environment.CurrentDirectory;
+		}
+
+		ProcessStartInfo info = new ProcessStartInfo( executable, launchArgs );
+		info.UseShellExecute = OperatingSystem.IsWindows();
 		info.CreateNoWindow = true;
-		info.WorkingDirectory = System.Environment.CurrentDirectory;
+		info.WorkingDirectory = workingDirectory;
+
+		if ( useAnvilLauncher )
+			info.Environment["SBOX_TARGET"] = "sbox-dev";
 
 		Process.Start( info );
 

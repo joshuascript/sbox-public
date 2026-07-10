@@ -11,7 +11,7 @@ internal class BuildShaders( bool forced = false )
 		{
 			string rootDir = Directory.GetCurrentDirectory();
 			string gameDir = Path.Combine( rootDir, "game" );
-			string shaderCompilerPath = Path.Combine( gameDir, "bin", "managed", "shadercompiler.exe" );
+			string shaderCompilerPath = Path.Combine( gameDir, "bin", "managed", OperatingSystem.IsWindows() ? "shadercompiler.exe" : "ShaderCompiler" );
 
 			// Verify shader compiler exists
 			if ( !File.Exists( shaderCompilerPath ) )

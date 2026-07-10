@@ -271,8 +271,14 @@ namespace Editor
 
 		public TextCursor GetCursorAtBlock( int block )
 		{
-			// todo - make sure this block is valid etc?
-			using var blockObj = _pte.document().findBlockByNumber( block );
+			var document = _pte.document();
+			if ( !document.IsValid )
+				return null;
+
+			using var blockObj = document.findBlockByNumber( block );
+			if ( !blockObj.IsValid )
+				return null;
+
 			return TextCursor.CreateFromBlock( blockObj );
 		}
 

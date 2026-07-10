@@ -4,6 +4,9 @@ namespace Sandbox.Engine.Shaders;
 
 public static class ShaderCompile
 {
+
+	[System.Runtime.InteropServices.DllImport( "libresourcecompiler.so", EntryPoint = "AnvilGenerateResourceFile", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl, CharSet = System.Runtime.InteropServices.CharSet.Ansi )]
+	private static extern int AnvilCompileResourceFile( string path );
 	static IVfx native;
 
 	/// <summary>
@@ -78,7 +81,7 @@ public static class ShaderCompile
 		if ( !Application.IsEditor )
 			return;
 
-		string dllName = "vfx_vulkan.dll";
+		string dllName = OperatingSystem.IsWindows() ? "vfx_vulkan.dll" : "vfx_vulkan.so";
 
 		if ( !native.IsNull )
 			return;
@@ -90,7 +93,7 @@ public static class ShaderCompile
 
 		// the shader compiler only needs the filesystem interface so we just pass
 		// in the createinterface for that, directly.
-		var createinterface = NativeEngine.CreateInterface.GetCreateInterface( "filesystem_stdio.dll" );
+		var createinterface = NativeEngine.CreateInterface.GetCreateInterface( OperatingSystem.IsWindows() ? "filesystem_stdio.dll" : "filesystem_stdio.so" );
 
 		native.Init( createinterface );
 	}
@@ -103,6 +106,9 @@ public static class ShaderCompile
 		var shader = new ShaderSource();
 		shader.AbsolutePath = absoluteFilePath;
 		shader.RelativePath = relativeFilePath;
+
+		if ( !compileOptions.ForceRecompile && OperatingSystem.IsLinux() && shader.HasCompiledFile )
+			return new Results { Success = true, Skipped = true };
 
 		shader.Read();
 
@@ -182,7 +188,7 @@ public static class ShaderCompile
 			: compiledFilePath;
 
 		result.CompiledShader = CompileResourceFile( sourceName, bytes );
-		result.Success = true;
+		result.Success = result.CompiledShader is not null;
 
 		return result;
 	}
@@ -194,7 +200,7 @@ public static class ShaderCompile
 	{
 		var result = new Results();
 		var vfx = new Shader();
-		if ( !vfx.LoadFromSource( s.AbsolutePath ) )
+		if ( !vfx.LoadFromSource( s.NativeFilename ) )
 		{
 			Log.Warning( $"Failed to load shader file ({s.AbsolutePath}) - is it in an assets folder?" );
 			return result;
@@ -222,8 +228,8 @@ public static class ShaderCompile
 		var bytes = s.Serialize( vfx, result, serializeSource: !coreAsset );
 
 		// convert to a resource file
-		result.CompiledShader = CompileResourceFile( s.AbsolutePath, bytes );
-		result.Success = true;
+		result.CompiledShader = CompileResourceFile( s.NativeFilename, bytes );
+		result.Success = result.CompiledShader is not null;
 
 		// done
 		return result;
@@ -234,6 +240,36 @@ public static class ShaderCompile
 	/// </summary>
 	static unsafe byte[] CompileResourceFile( string filename, byte[] data )
 	{
+		if ( OperatingSystem.IsLinux() )
+		{
+			// The in-memory GenerateResourceBytes path returns nullptr on Linux because
+			// our bridge can't allocate a real CUtlBuffer.  Instead, write the data to a
+			// temp file with the right extension, compile it via the Wine bridge, and
+			// read the _c file back as bytes.
+			try
+			{
+				var tempDir = System.IO.Path.Combine( System.IO.Path.GetTempPath(), $"anvil_shader_{System.Guid.NewGuid():N}" );
+				System.IO.Directory.CreateDirectory( tempDir );
+				var tempFile = System.IO.Path.Combine( tempDir, System.IO.Path.GetFileName( filename ) );
+				System.IO.File.WriteAllBytes( tempFile, data );
+
+				if ( AnvilCompileResourceFile( tempFile ) != 0 )
+				{
+					var compiledPath = tempFile + "_c";
+					if ( System.IO.File.Exists( compiledPath ) )
+						return System.IO.File.ReadAllBytes( compiledPath );
+				}
+
+				Log.Warning( $"Linux shader resource bridge failed to package {filename}" );
+				return null;
+			}
+			catch ( System.Exception e )
+			{
+				Log.Warning( $"Linux shader resource bridge error for {filename}: {e.Message}" );
+				return null;
+			}
+		}
+
 		fixed ( byte* dataPtr = data )
 		{
 			using CUtlBuffer buffer = IResourceCompilerSystem.GenerateResourceBytes( filename, (IntPtr)dataPtr, data.Length );

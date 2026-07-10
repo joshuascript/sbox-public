@@ -25,7 +25,7 @@ namespace Editor
 			string geometryCookie = EditorCookie.GetString( "splash.geometry", null );
 			RestoreGeometry( geometryCookie );
 
-			var aspect = (float)BackgroundImage.Height / BackgroundImage.Width;
+			var aspect = BackgroundImage.Width > 0 ? (float)BackgroundImage.Height / BackgroundImage.Width : 0.5625f;
 			Size = new( 700, (700 * aspect).FloorToInt() + InfoAreaHeight );
 
 			Show();
@@ -69,7 +69,13 @@ namespace Editor
 				}
 			}
 
-			return Pixmap.FromFile( "splash_screen.png" );
+			var fallback = Pixmap.FromFile( "splash_screen.png" );
+			if ( fallback is not null )
+				return fallback;
+
+			fallback = new Pixmap( 700, 394 );
+			fallback.Clear( Color.Black );
+			return fallback;
 		}
 
 		public override void OnDestroyed()
@@ -83,7 +89,8 @@ namespace Editor
 			if ( Singleton.IsValid() )
 			{
 				EditorCookie.Set( "splash.geometry", Singleton.SaveGeometry() );
-				Singleton.Destroy();
+				// ponytail: hide and keep it alive; deleteMuchLater() can run while Qt is still painting startup.
+				Singleton.Hide();
 			}
 
 			Singleton = null;

@@ -89,7 +89,11 @@ public class VerticalTabWidget : Widget
 
 		tabs[name] = tab;
 
-		tab.MouseClick = () =>
+		tab.MouseLeftPress = () =>
+		{
+			SetPage( page );
+		};
+		tab.Clicked = () =>
 		{
 			SetPage( page );
 		};

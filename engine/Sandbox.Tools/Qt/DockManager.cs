@@ -1,4 +1,5 @@
 ﻿using Sandbox.Utility;
+using System.Text.Json;
 using System;
 
 namespace Editor;
@@ -354,6 +355,109 @@ public partial class DockManager : Widget
 		return default;
 	}
 
+	private void LoadFlatState( string json )
+	{
+		if ( string.IsNullOrWhiteSpace( json ) )
+			return;
+
+		try
+		{
+			using var doc = JsonDocument.Parse( json );
+			var seen = new HashSet<string>();
+			var added = new List<Widget>();
+
+			foreach ( var (name, managedType) in EnumerateDocks( doc.RootElement ) )
+			{
+				if ( string.IsNullOrWhiteSpace( managedType ) )
+					continue;
+
+				if ( !seen.Add( $"{name}\0{managedType}" ) )
+					continue;
+
+				var ptr = OnCreateDock( name, managedType );
+				if ( ptr == default )
+					continue;
+
+				var widget = QObject.FindOrCreate( (Native.QWidget)ptr ) as Widget;
+				if ( widget is null || !widget.IsValid )
+					continue;
+
+				AddDock( null, widget, DockArea.LastUsed );
+				added.Add( widget );
+			}
+
+			foreach ( var widget in added )
+			{
+				RaiseDock( widget );
+			}
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( $"Couldn't restore dock layout on Linux: {e}" );
+		}
+	}
+
+	static IEnumerable<(string name, string managedType)> EnumerateDocks( JsonElement element )
+	{
+		if ( element.ValueKind == JsonValueKind.Object )
+		{
+			if ( element.TryGetProperty( "objects", out var objectsElement ) &&
+				objectsElement.ValueKind == JsonValueKind.Array )
+			{
+				var objects = objectsElement.EnumerateArray().ToArray();
+				var currentIndex = element.TryGetProperty( "currentIndex", out var currentIndexElement ) &&
+					currentIndexElement.TryGetInt32( out var index )
+						? index
+						: -1;
+
+				for ( var i = 0; i < objects.Length; i++ )
+				{
+					if ( i == currentIndex )
+						continue;
+
+					foreach ( var dock in EnumerateDocks( objects[i] ) )
+						yield return dock;
+				}
+
+				if ( currentIndex >= 0 && currentIndex < objects.Length )
+				{
+					foreach ( var dock in EnumerateDocks( objects[currentIndex] ) )
+						yield return dock;
+				}
+
+				yield break;
+			}
+			if ( element.TryGetProperty( "managedType", out var managedTypeElement ) &&
+				managedTypeElement.ValueKind == JsonValueKind.String )
+			{
+				var managedType = managedTypeElement.GetString();
+				var name = element.TryGetProperty( "name", out var nameElement ) &&
+					nameElement.ValueKind == JsonValueKind.String
+						? nameElement.GetString()
+						: managedType;
+
+				yield return (name, managedType);
+			}
+
+			foreach ( var property in element.EnumerateObject() )
+			{
+				foreach ( var dock in EnumerateDocks( property.Value ) )
+					yield return dock;
+			}
+
+			yield break;
+		}
+
+		if ( element.ValueKind != JsonValueKind.Array )
+			yield break;
+
+		foreach ( var child in element.EnumerateArray() )
+		{
+			foreach ( var dock in EnumerateDocks( child ) )
+				yield return dock;
+		}
+	}
+
 	/// <summary>
 	/// A JSON string representing the entire state of the dock manager, i.e. position of all the docks, etc.
 	/// </summary>
@@ -363,6 +467,10 @@ public partial class DockManager : Widget
 		set
 		{
 			_tw.loadStateJson( value );
+
+			if ( System.OperatingSystem.IsLinux() )
+				LoadFlatState( value );
+
 			OnLayoutLoaded?.InvokeWithWarning();
 		}
 	}

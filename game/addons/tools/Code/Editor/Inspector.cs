@@ -163,6 +163,11 @@ public class Inspector : Widget
 		return true;
 	}
 
+	public string GetDebugStatus()
+	{
+		return $"type={GetType().Name} visible={Visible} size={Size} inspecting={_currentInspector?.GetType().Name ?? "<none>"} inspectorValid={_currentInspector?.IsValid().ToString() ?? "<none>"} editorValid={Editor is not null}";
+	}
+
 	public override void OnDestroyed()
 	{
 		base.OnDestroyed();

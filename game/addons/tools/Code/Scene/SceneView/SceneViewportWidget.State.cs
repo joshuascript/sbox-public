@@ -155,7 +155,7 @@ public partial class SceneViewportWidget
 		// 2. Place camera where a Camera component is
 		//
 		var cc = scene.Camera;
-		if ( cc.IsValid() )
+		if ( cc.IsValid() && !System.OperatingSystem.IsLinux() )
 		{
 			State.CameraPosition = cc.WorldPosition;
 			if ( !State.Is2D )

@@ -1019,6 +1019,7 @@ namespace Editor
 
 		public virtual void SetWindowIcon( Pixmap icon )
 		{
+			if ( icon is null ) return;
 			_widget.setWindowIconFromPixmap( icon.ptr );
 		}
 

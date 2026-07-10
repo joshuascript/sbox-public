@@ -105,14 +105,13 @@ internal class TitleBar : Widget
 
 		if ( icon == null )
 		{
-			IconWidget.Visible = icon != null;
+			IconWidget.Visible = false;
 			IconWidget.FixedSize = new Vector2( 0 );
+			return true;
 		}
-		else
-		{
-			var rect = IconWidget.LocalRect.Contain( IconSize );
-			Paint.Draw( rect, IconWidget.GetIcon() );
-		}
+
+		var rect = IconWidget.LocalRect.Contain( IconSize );
+		Paint.Draw( rect, icon );
 
 		return true;
 	}

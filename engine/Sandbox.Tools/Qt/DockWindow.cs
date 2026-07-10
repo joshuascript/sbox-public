@@ -41,7 +41,7 @@ namespace Editor
 			base.RestoreFromStateCookie();
 
 			var state = ProjectCookie.GetString( $"Window.{StateCookie}.Dock", null );
-			if ( string.IsNullOrWhiteSpace( state ) )
+			if ( string.IsNullOrWhiteSpace( state ) || (System.OperatingSystem.IsLinux() && state.Trim() == "{}") )
 			{
 				RestoreDefaultDockLayout();
 				return;

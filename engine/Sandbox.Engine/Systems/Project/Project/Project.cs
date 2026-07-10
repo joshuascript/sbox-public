@@ -224,6 +224,16 @@ public sealed partial class Project
 	/// </summary>
 	public bool HasAssetsPath() => RootFileSystem?.DirectoryExists( "Assets" ) ?? false;
 
+	private string GetProjectFolderPath( string name )
+	{
+		var path = System.IO.Path.Combine( RootDirectory.FullName, name );
+		if ( System.IO.Directory.Exists( path ) )
+			return path;
+
+		var lowercasePath = System.IO.Path.Combine( RootDirectory.FullName, name.ToLowerInvariant() );
+		return System.IO.Directory.Exists( lowercasePath ) ? lowercasePath : path;
+	}
+
 	internal void Save()
 	{
 		OnSaveProject?.Invoke();

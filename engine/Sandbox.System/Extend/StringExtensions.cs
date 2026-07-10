@@ -89,6 +89,13 @@ public static partial class SandboxSystemExtensions
 	/// </summary>
 	public static string NormalizeFilename( this string str, bool enforceInitialSlash, bool enforceLowerCase, char targetSeparator = '/' )
 	{
+		// ponytail: on Linux, never lowercase absolute filesystem paths — the
+		// filesystem is case-sensitive and lowercasing /home/user/Projects/... to
+		// /home/user/projects/... makes File.Exists fail.  VFS relative paths still
+		// need lowercasing for case-insensitive search path lookups.
+		if ( OperatingSystem.IsLinux() && str.Length > 0 && str[0] == '/' )
+			enforceLowerCase = false;
+
 		if ( str.Length == 0 )
 		{
 			return enforceInitialSlash ? string.Create( 1, targetSeparator, static ( span, sep ) => span[0] = sep ) : str;

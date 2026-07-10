@@ -40,7 +40,6 @@ public class CloudLocations : TreeView, IFilterHost
 
 	public CloudLocations( CloudAssetBrowser parent ) : base( parent )
 	{
-		EditorEvent.Register( this );
 		MinimumSize = 200;
 		ItemSelected = OnItemClicked;
 
@@ -142,10 +141,6 @@ public class CloudLocations : TreeView, IFilterHost
 		}
 	}
 
-	~CloudLocations()
-	{
-		EditorEvent.Unregister( this );
-	}
 
 	/// <summary>
 	/// Called by the editor event system whenever a package's favourite state changes.

@@ -31,6 +31,10 @@ internal partial class RenderPipeline
 
 	internal void AddLayersToView( ISceneView view, RenderViewport viewport, SceneViewRenderTargetHandle rtColor, SceneViewRenderTargetHandle rtDepth, RenderMultisampleType nMSAA, CRenderAttributes pipelineAttrs, RenderViewport screenSize )
 	{
+		var viewportRect = viewport.Rect;
+		if ( viewportRect.Width < 1 || viewportRect.Height < 1 )
+			return;
+
 		var msaa = nMSAA.FromEngine();
 		var pipelineAttributes = new RenderAttributes( pipelineAttrs );
 
@@ -113,31 +117,40 @@ internal partial class RenderPipeline
 		// Bloom layer, Effects that only show up on bloom like a ghost effect
 		{
 			RenderViewport quarterViewport = viewport / 4;
+			var quarterRect = quarterViewport.Rect;
 
-			var bloomRt = RenderTarget.GetTemporary(
-				(int)quarterViewport.Rect.Width,
-				(int)quarterViewport.Rect.Height,
-				colorFormat: ImageFormat.RGBA1010102,
-				depthFormat: ImageFormat.D32,
-				numMips: (int)Math.Log2( Math.Max( quarterViewport.Rect.Width, quarterViewport.Rect.Height ) ) );
+			if ( quarterRect.Width >= 1 && quarterRect.Height >= 1 )
+			{
+				var bloomRt = RenderTarget.GetTemporary(
+					(int)quarterRect.Width,
+					(int)quarterRect.Height,
+					colorFormat: ImageFormat.RGBA1010102,
+					depthFormat: ImageFormat.D32,
+					numMips: (int)Math.Log2( Math.Max( quarterRect.Width, quarterRect.Height ) ) );
 
-			QuarterDepthDownsampleLayer.Setup( view, quarterViewport, rtDepth, msaa != MultisampleAmount.MultisampleNone, bloomRt );
-			QuarterDepthDownsampleLayer.AddToView( view, quarterViewport );
+				QuarterDepthDownsampleLayer.Setup( view, quarterViewport, rtDepth, msaa != MultisampleAmount.MultisampleNone, bloomRt );
+				QuarterDepthDownsampleLayer.AddToView( view, quarterViewport );
 
-			BloomLayer.Setup( view, bloomRt );
-			BloomLayer.AddToView( view, quarterViewport );
+				BloomLayer.Setup( view, bloomRt );
+				BloomLayer.AddToView( view, quarterViewport );
 
-			view.GetRenderAttributesPtr().SetTextureValue( "QuarterResEffectsBloomInputTexture", bloomRt.ColorTarget.native, -1 );
+				view.GetRenderAttributesPtr().SetTextureValue( "QuarterResEffectsBloomInputTexture", bloomRt.ColorTarget.native, -1 );
 
-			BloomDownsampleLayer.RT = bloomRt;
-			BloomDownsampleLayer.AddToView( view, quarterViewport );
+				BloomDownsampleLayer.RT = bloomRt;
+				BloomDownsampleLayer.AddToView( view, quarterViewport );
+			}
 		}
 
 		// Refraction stencil layer, used for filtering out depth on Framebuffer copies
 		{
 			RenderViewport quarterViewport = viewport / 4;
-			RefractionStencilLayer.Setup( view, quarterViewport );
-			RefractionStencilLayer.AddToView( view, quarterViewport );
+			var quarterRect = quarterViewport.Rect;
+
+			if ( quarterRect.Width >= 1 && quarterRect.Height >= 1 )
+			{
+				RefractionStencilLayer.Setup( view, quarterViewport );
+				RefractionStencilLayer.AddToView( view, quarterViewport );
+			}
 		}
 
 		// Opaque pass

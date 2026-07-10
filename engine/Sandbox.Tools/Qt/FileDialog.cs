@@ -11,6 +11,8 @@ namespace Editor
 		{
 			var ptr = QFileDialog.Create( parent?._widget ?? default );
 			NativeInit( ptr );
+			if ( OperatingSystem.IsLinux() )
+				_filedialog.setOption( Option.DontUseNativeDialog, true );
 		}
 
 		internal override void NativeInit( IntPtr ptr )
@@ -77,6 +79,7 @@ namespace Editor
 		{
 			_filedialog.setNameFilter( text );
 		}
+
 
 		public void SetFindDirectory() => _filedialog.setFileMode( FileMode.Directory );
 		public void SetFindFile() => _filedialog.setFileMode( FileMode.AnyFile );

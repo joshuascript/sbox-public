@@ -1,0 +1,20 @@
+{
+  "files.associations": {
+    "*.shader": "slang",
+    "*.hlsl": "slang"
+  },
+  "slang.additionalSearchPaths": [
+    "/home/formatme/Projects/sbox/sbox-public/game/core/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/addons/base/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/addons/menu/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/addons/tools/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/editor/ShaderGraph/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/editor/ActionGraph/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/editor/MovieMaker/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/editor/Hammer/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/editor/DooEditor/Assets/shaders",
+    "/home/formatme/Projects/sbox/sbox-public/game/samples/sweeper/Assets/shaders"
+  ],
+  "slang.predefinedMacros": [],
+  "slang.workspaceFlavor": "vfx"
+}

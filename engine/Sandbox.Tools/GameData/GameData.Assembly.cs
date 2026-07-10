@@ -69,15 +69,18 @@ public static partial class GameData
 			// Update our native class if it already exists, we never want to delete it since it's definitely referenced in 100 places
 			// We should also consider using smart pointers on the native side.
 			//
-			var nativeClass = NativeGameData.ClassForName( mapClass.Name, out int __ );
-			if ( !nativeClass.IsValid )
+			if ( !NativeGameData.IsNull )
 			{
-				nativeClass = Native.CGameDataClass.Create();
-				NativeGameData.AddClass( mapClass.ToNative( nativeClass ), $"sbox/{assembly.GetName().Name}" );
-			}
-			else
-			{
-				mapClass.ToNative( nativeClass );
+				var nativeClass = NativeGameData.ClassForName( mapClass.Name, out int __ );
+				if ( !nativeClass.IsValid )
+				{
+					nativeClass = Native.CGameDataClass.Create();
+					NativeGameData.AddClass( mapClass.ToNative( nativeClass ), $"sbox/{assembly.GetName().Name}" );
+				}
+				else
+				{
+					mapClass.ToNative( nativeClass );
+				}
 			}
 		}
 

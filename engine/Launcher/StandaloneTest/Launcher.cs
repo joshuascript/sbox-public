@@ -14,7 +14,7 @@ public static class Launcher
 {
 	public static int Main()
 	{
-		if ( FindExisting() )
+		if ( !OperatingSystem.IsLinux() && FindExisting() )
 			return 0;
 
 		var appSystem = new LauncherAppSystem();
@@ -56,13 +56,13 @@ public static class Launcher
 
 	const int SW_RESTORE = 9;
 
-	[System.Runtime.InteropServices.DllImport( "User32.dll" )]
+	[System.Runtime.InteropServices.DllImport( "User32.dll", EntryPoint = "SetForegroundWindow", SetLastError = true )]
 	private static extern bool SetForegroundWindow( IntPtr handle );
 
-	[System.Runtime.InteropServices.DllImport( "User32.dll" )]
+	[System.Runtime.InteropServices.DllImport( "User32.dll", EntryPoint = "ShowWindow", SetLastError = true )]
 	private static extern bool ShowWindow( IntPtr handle, int nCmdShow );
 
-	[System.Runtime.InteropServices.DllImport( "User32.dll" )]
+	[System.Runtime.InteropServices.DllImport( "User32.dll", EntryPoint = "IsIconic", SetLastError = true )]
 	private static extern bool IsIconic( IntPtr handle );
 }
 

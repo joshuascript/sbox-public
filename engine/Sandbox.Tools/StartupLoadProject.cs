@@ -47,6 +47,9 @@ static class StartupLoadProject
 	{
 		IsLoading = true;
 
+		if ( !EditorSplashScreen.Singleton.IsValid() )
+			ManagedTools.StartSplashScreen();
+
 		// Create the editor window - hidden
 		new EditorMainWindow();
 
@@ -212,6 +215,8 @@ static class StartupLoadProject
 
 			// Mount our current project into the filesystem and make sure to load all assets
 			FileSystem.Mounted.CreateAndMount( project.GetAssetsPath() );
+		CompileMissingProjectResourcesBeforeLoad( project );
+
 			await ResourceLoader.LoadAllGameResourceAsync( FileSystem.Mounted, ct, true );
 		}
 		else
@@ -222,6 +227,8 @@ static class StartupLoadProject
 			// It'd be nice to do a full end to end test, but this is as far as it'll go
 			if ( Sandbox.Application.IsUnitTest )
 				return true;
+
+		CompileMissingProjectResourcesBeforeLoad( project );
 
 			await GameInstanceDll.Current.LoadGamePackageAsync( project.Package.FullIdent, GameLoadingFlags.Host | GameLoadingFlags.Reload, ct );
 		}
@@ -349,9 +356,35 @@ static class StartupLoadProject
 		}
 	}
 
+	static void CompileMissingProjectResourcesBeforeLoad( Project project )
+	{
+		if ( !System.OperatingSystem.IsLinux() )
+			return;
+
+		var projectDir = Path.GetFullPath( project.RootDirectory.FullName );
+		var gr = AssetSystem.All.Where( x => x.AssetType?.IsGameResource == true
+			&& x.HasSourceFile
+			&& !x.HasCompiledFile
+			&& !string.IsNullOrWhiteSpace( x.AbsoluteSourcePath )
+			&& Path.GetFullPath( x.AbsoluteSourcePath ).StartsWith( projectDir, StringComparison.OrdinalIgnoreCase ) ).ToArray();
+
+		if ( gr.Length == 0 )
+			return;
+
+		Log.Info( $"Compiling {gr.Length} missing project resources before loading resources" );
+
+		for ( int i = 0; i < gr.Length; i++ )
+		{
+			EditorSplashScreen.SetMessage( $"Compiling resource {i + 1}/{gr.Length} {gr[i].RelativePath}" );
+			IToolsDll.Current?.Spin();
+			gr[i].Compile( false );
+		}
+	}
+
 	static void CompileAllAssets()
 	{
 		var sw = Stopwatch.StartNew();
+		IAssetSystem.RunFrame();
 		var gr = AssetSystem.All.Where( x => !x.IsTrivialChild && x.CanRecompile && !x.IsCompiledAndUpToDate ).ToArray();
 		if ( gr.Length == 0 ) return;
 

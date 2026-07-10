@@ -27,7 +27,8 @@
 		public static void ShowTool( string name )
 		{
 			var tool = All.FirstOrDefault( x => x.Name == name );
-			Native.ToolGlue.ShowTool( $"tools/{tool.Library}.dll" );
+		var ext = System.OperatingSystem.IsWindows() ? ".dll" : ".so";
+		Native.ToolGlue.ShowTool( $"tools/{tool.Library}{ext}" );
 		}
 	}
 }

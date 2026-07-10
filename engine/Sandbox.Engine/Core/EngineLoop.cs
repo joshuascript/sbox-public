@@ -478,6 +478,7 @@ internal static class EngineLoop
 	static Superluminal _toolsRender = new Superluminal( "Tools Render", "#6e6e3a" );
 	static Superluminal _gameRender = new Superluminal( "Game Render", "#3a6e4d" );
 	static Superluminal _menuRender = new Superluminal( "Menu Render", "#6e3a6e" );
+	static int _viewportSceneViewLogCount;
 
 	internal static void OnClientOutput()
 	{
@@ -505,6 +506,24 @@ internal static class EngineLoop
 	/// </summary>
 	internal static void OnSceneViewSubmitted( ISceneView view )
 	{
+		if ( System.Environment.GetEnvironmentVariable( "SBOX_VIEWPORT_SCENEVIEW_LOG" ) == "1" )
+		{
+			_viewportSceneViewLogCount++;
+			if ( _viewportSceneViewLogCount <= 20 || _viewportSceneViewLogCount % 60 == 0 )
+			{
+				try
+				{
+					var viewport = view.GetMainViewport();
+					var swapChain = view.GetSwapChain();
+					System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-scene-view-submitted] count={_viewportSceneViewLogCount} view=0x{view.self.ToInt64():x} swapchain=0x{swapChain.ToInt64():x} viewport={viewport}{System.Environment.NewLine}" );
+				}
+				catch ( System.Exception e )
+				{
+					System.IO.File.AppendAllText( "/tmp/sbox-viewport-bind.log", $"[viewport-scene-view-submit-error] count={_viewportSceneViewLogCount} {e.GetType().Name}: {e.Message}{System.Environment.NewLine}" );
+				}
+			}
+		}
+
 		RenderPipeline.OnSceneViewSubmitted( view );
 	}
 

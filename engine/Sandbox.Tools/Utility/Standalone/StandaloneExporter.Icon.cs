@@ -9,16 +9,16 @@ partial class StandaloneExporter
 {
 	class IconUpdater
 	{
-		[DllImport( "kernel32.dll", SetLastError = true, CharSet = CharSet.Auto )]
-		private static extern IntPtr BeginUpdateResource( string pFileName, [MarshalAs( UnmanagedType.Bool )] bool bDeleteExistingResources );
+	[DllImport( "kernel32.dll", SetLastError = true, CharSet = CharSet.Auto )]
+	private static extern IntPtr BeginUpdateResource( string pFileName, [MarshalAs( UnmanagedType.Bool )] bool bDeleteExistingResources );
 
-		[DllImport( "kernel32.dll", SetLastError = true, CharSet = CharSet.Auto )]
-		[return: MarshalAs( UnmanagedType.Bool )]
-		private static extern bool UpdateResource( IntPtr hUpdate, IntPtr lpType, IntPtr lpName, ushort wLanguage, byte[] lpData, uint cbData );
+	[DllImport( "kernel32.dll", SetLastError = true, CharSet = CharSet.Auto )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static extern bool UpdateResource( IntPtr hUpdate, IntPtr lpType, IntPtr lpName, ushort wLanguage, byte[] lpData, uint cbData );
 
-		[DllImport( "kernel32.dll", SetLastError = true )]
-		[return: MarshalAs( UnmanagedType.Bool )]
-		private static extern bool EndUpdateResource( IntPtr hUpdate, [MarshalAs( UnmanagedType.Bool )] bool fDiscard );
+	[DllImport( "kernel32.dll", SetLastError = true )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static extern bool EndUpdateResource( IntPtr hUpdate, [MarshalAs( UnmanagedType.Bool )] bool fDiscard );
 
 		private const int RT_ICON = 3;
 		private const int RT_GROUP_ICON = 14;

@@ -9,7 +9,7 @@ namespace Editor;
 public static class GameMode
 {
 	static Widget _inPlay;
-
+	static System.IntPtr _registeredPlayWindowId;
 	/// <summary>
 	/// Is a render widget the active play widget
 	/// </summary>
@@ -28,8 +28,14 @@ public static class GameMode
 		widget.MouseTracking = true;
 		widget.MouseMove += OnPlayWidgetMouseMove;
 
-		NativeEngine.InputSystem.RegisterWindowWithSDL( widget._widget.winId() );
-		g_pEngineServiceMgr.SetEngineState( widget._widget.winId(), widget.SwapChain );
+		var windowId = widget._widget.winId();
+		if ( !System.OperatingSystem.IsLinux() )
+		{
+			NativeEngine.InputSystem.RegisterWindowWithSDL( windowId );
+			_registeredPlayWindowId = windowId;
+		}
+
+		g_pEngineServiceMgr.SetEngineState( windowId, widget.SwapChain );
 
 		// The play widget is where the game renders, so make it the main window: flip the existing
 		// m_bIsMainWindow flag so GetGPUFrameTimeMS reports the running game's GPU frame time.
@@ -54,11 +60,13 @@ public static class GameMode
 		_inPlay.MouseMove -= OnPlayWidgetMouseMove;
 		_inPlay.MouseTracking = false;
 
-		NativeEngine.InputSystem.UnregisterWindowFromSDL( _inPlay._widget.winId() );
+		if ( !System.OperatingSystem.IsLinux() && _registeredPlayWindowId != default )
+			NativeEngine.InputSystem.UnregisterWindowFromSDL( _registeredPlayWindowId );
 
 		if ( _inPlay is SceneRenderingWidget playWidget )
 			g_pRenderDevice.SetSwapChainIsMainWindow( playWidget.SwapChain, false );
 
+		_registeredPlayWindowId = default;
 		_inPlay = null;
 	}
 

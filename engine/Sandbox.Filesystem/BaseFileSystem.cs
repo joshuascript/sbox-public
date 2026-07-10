@@ -14,7 +14,10 @@ public class BaseFileSystem
 
 	protected Zio.IFileSystem system;
 	protected Zio.IFileSystemWatcher watcher;
-
+	protected System.IO.FileSystemWatcher managedWatcher;
+	protected bool useManagedWatcher;
+	protected Action externalFileChanged;
+	protected virtual bool UseManagedWatcher => useManagedWatcher;
 	internal List<FileWatch> watchers { get; } = new List<FileWatch>();
 	internal HashSet<string> changedFiles { get; } = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
 
@@ -48,6 +51,9 @@ public class BaseFileSystem
 
 			watcher?.Dispose();
 			watcher = null;
+
+			managedWatcher?.Dispose();
+			managedWatcher = null;
 
 			foreach ( var watcherSbox in watchers.ToArray() ) watcherSbox.Dispose();
 			watchers.Clear();
@@ -322,7 +328,11 @@ public class BaseFileSystem
 		// Log.Trace( $"CreateFileSystem( {path} ) [{GetFullPath(path)}]" );
 
 		var sub = new Zio.FileSystems.SubFileSystem( system, FixPath( path ), false, false );
-		return new BaseFileSystem( sub );
+		return new BaseFileSystem( sub )
+		{
+			useManagedWatcher = UseManagedWatcher,
+			externalFileChanged = OnExternalFileChanged
+		};
 	}
 
 
@@ -394,6 +404,8 @@ public class BaseFileSystem
 	{
 		watcher?.Dispose();
 		watcher = null;
+		managedWatcher?.Dispose();
+		managedWatcher = null;
 
 		if ( watcher == null )
 		{
@@ -409,6 +421,9 @@ public class BaseFileSystem
 
 			watcher.EnableRaisingEvents = true;
 		}
+
+		if ( OperatingSystem.IsLinux() && UseManagedWatcher )
+			CreateManagedWatcher();
 
 		FileWatch w = (pathglob != null) ? new FileWatch( this, pathglob ) : new FileWatch( this );
 
@@ -461,6 +476,7 @@ public class BaseFileSystem
 			Log.Trace( $"File [{e.ChangeType}] - {path} / {e.FullPath} / {e.Name}" );
 		}
 
+		OnExternalFileChanged();
 		AddChangedFile( path );
 	}
 
@@ -477,6 +493,7 @@ public class BaseFileSystem
 			Log.Trace( $"File [{e.ChangeType}] - {oldpath} -> {path}" );
 		}
 
+		OnExternalFileChanged();
 		AddChangedFile( path );
 		AddChangedFile( oldpath );
 	}
@@ -487,6 +504,76 @@ public class BaseFileSystem
 		{
 			Log.Warning( $"File [Error] - {e.Exception}" );
 		}
+	}
+
+	void CreateManagedWatcher()
+	{
+		var root = GetFullPath( "/" );
+		if ( string.IsNullOrWhiteSpace( root ) )
+			return;
+
+		root = Path.GetFullPath( root );
+		if ( root == Path.GetPathRoot( root ) || !Directory.Exists( root ) )
+			return;
+
+		try
+		{
+			managedWatcher = new System.IO.FileSystemWatcher( root )
+			{
+				IncludeSubdirectories = true,
+				NotifyFilter = System.IO.NotifyFilters.Attributes | System.IO.NotifyFilters.Size | System.IO.NotifyFilters.CreationTime | System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.FileName | System.IO.NotifyFilters.DirectoryName | System.IO.NotifyFilters.Security,
+				Filter = "*"
+			};
+
+			managedWatcher.Changed += OnManagedDirectoryContentsChanged;
+			managedWatcher.Deleted += OnManagedDirectoryContentsChanged;
+			managedWatcher.Created += OnManagedDirectoryContentsChanged;
+			managedWatcher.Renamed += OnManagedDirectoryContentsRenamed;
+			managedWatcher.Error += OnManagedDirectoryContentsError;
+			managedWatcher.EnableRaisingEvents = true;
+		}
+		catch ( Exception e )
+		{
+			if ( TraceChanges )
+				Log.Warning( $"File [ManagedWatcherError] - {e.Message}" );
+		}
+	}
+
+	void OnManagedDirectoryContentsChanged( object sender, FileSystemEventArgs e )
+	{
+		var path = GetRelativePath( system, e.FullPath );
+		if ( path is null )
+			return;
+
+		if ( TraceChanges )
+			Log.Trace( $"File [{e.ChangeType}] - {path} / {e.FullPath}" );
+
+		OnExternalFileChanged();
+		AddChangedFile( path );
+	}
+
+	void OnManagedDirectoryContentsRenamed( object sender, RenamedEventArgs e )
+	{
+		var path = GetRelativePath( system, e.FullPath );
+		var oldpath = GetRelativePath( system, e.OldFullPath );
+
+		if ( TraceChanges )
+			Log.Trace( $"File [{e.ChangeType}] - {oldpath} -> {path}" );
+
+		OnExternalFileChanged();
+		if ( path is not null ) AddChangedFile( path );
+		if ( oldpath is not null ) AddChangedFile( oldpath );
+	}
+
+	void OnManagedDirectoryContentsError( object sender, ErrorEventArgs e )
+	{
+		if ( TraceChanges )
+			Log.Warning( $"File [ManagedWatcherError] - {e.GetException()}" );
+
+	}
+	protected virtual void OnExternalFileChanged()
+	{
+		externalFileChanged?.Invoke();
 	}
 
 	/// <summary>

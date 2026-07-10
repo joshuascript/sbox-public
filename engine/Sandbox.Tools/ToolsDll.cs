@@ -85,6 +85,9 @@ internal class ToolsDll : IToolsDll
 	/// </summary>
 	public async Task Initialize()
 	{
+		// Load fonts (Material Icons etc.) — the editor path skips QtAppSystem
+		// which normally calls ManagedTools.InitQt(). Without this, icons show as text.
+		ManagedTools.InitQt();
 		// Associate .sbproj with the editor
 		FileAssociations.Create();
 
@@ -307,6 +310,7 @@ internal class ToolsDll : IToolsDll
 			g_pToolFramework2.Tools_RunFrame();
 			g_pToolFramework2.Tools_OnIdle( 0 );
 			g_pToolFramework2.Tools_UnloadPending();
+			SceneRenderingWidget.CreateMissingLinuxSwapChains();
 		}
 	}
 

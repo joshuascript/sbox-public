@@ -1,11 +1,110 @@
 ﻿using Native;
 using Sandbox.Engine;
 using System;
+using System.Runtime.InteropServices;
 
 namespace Editor;
 
 public static class Application
 {
+	private static IntPtr _x11Display;
+	private static bool _triedX11Display;
+	private static readonly byte[] _x11Keymap = new byte[32];
+
+	[DllImport( "libX11.so.6", EntryPoint = "XOpenDisplay" )]
+	private static extern IntPtr XOpenDisplay( IntPtr displayName );
+
+	[DllImport( "libX11.so.6", EntryPoint = "XDefaultRootWindow" )]
+	private static extern IntPtr XDefaultRootWindow( IntPtr display );
+
+	[DllImport( "libX11.so.6", EntryPoint = "XQueryPointer" )]
+	private static extern int XQueryPointer( IntPtr display, IntPtr window, out IntPtr root, out IntPtr child, out int rootX, out int rootY, out int windowX, out int windowY, out uint mask );
+
+	private static bool TryGetLinuxCursorPosition( out Vector2 position )
+	{
+		position = default;
+		if ( !OperatingSystem.IsLinux() )
+			return false;
+
+		var display = GetX11Display();
+		if ( display == default )
+			return false;
+
+		var rootWindow = XDefaultRootWindow( display );
+		if ( XQueryPointer( display, rootWindow, out _, out _, out var rootX, out var rootY, out _, out _, out _ ) == 0 )
+			return false;
+
+		position = new Vector2( rootX, rootY );
+		return true;
+	}
+
+	[DllImport( "libX11.so.6", EntryPoint = "XQueryKeymap" )]
+	private static extern void XQueryKeymap( IntPtr display, [Out] byte[] keys );
+
+	[DllImport( "libX11.so.6", EntryPoint = "XKeysymToKeycode" )]
+	private static extern byte XKeysymToKeycode( IntPtr display, IntPtr keySym );
+
+	private static IntPtr GetX11Display()
+	{
+		if ( _x11Display != default || _triedX11Display )
+			return _x11Display;
+
+		_triedX11Display = true;
+		try
+		{
+			_x11Display = XOpenDisplay( default );
+		}
+		catch ( DllNotFoundException ) { }
+		catch ( EntryPointNotFoundException ) { }
+		catch ( BadImageFormatException ) { }
+
+		return _x11Display;
+	}
+
+	private static bool TryGetLinuxKeyDown( KeyCode code, out bool down )
+	{
+		down = false;
+		if ( !OperatingSystem.IsLinux() )
+			return false;
+
+		var key = (int)code;
+		if ( key < 'A' || key > 'Z' )
+			return false;
+
+		var display = GetX11Display();
+		if ( display == default )
+			return false;
+
+		var keyCode = XKeysymToKeycode( display, (IntPtr)key );
+		if ( keyCode == 0 )
+			return false;
+
+		XQueryKeymap( display, _x11Keymap );
+
+		down = (_x11Keymap[keyCode >> 3] & (1 << (keyCode & 7))) != 0;
+		return true;
+	}
+
+	private static MouseButtons GetLinuxMouseButtons()
+	{
+		if ( !OperatingSystem.IsLinux() )
+			return MouseButtons.None;
+
+		var display = GetX11Display();
+		if ( display == default )
+			return MouseButtons.None;
+
+		var rootWindow = XDefaultRootWindow( display );
+		if ( XQueryPointer( display, rootWindow, out _, out _, out _, out _, out _, out _, out var mask ) == 0 )
+			return MouseButtons.None;
+
+		var buttons = MouseButtons.None;
+		if ( (mask & (1u << 8)) != 0 ) buttons |= MouseButtons.Left;
+		if ( (mask & (1u << 9)) != 0 ) buttons |= MouseButtons.Middle;
+		if ( (mask & (1u << 10)) != 0 ) buttons |= MouseButtons.Right;
+		return buttons;
+	}
+
 	/// <summary>
 	/// Called when any widget is clicked. Can set MouseEvent.Accepted to true to prevent the Widget's OnMouseClick from firing.
 	/// </summary>
@@ -50,7 +149,9 @@ public static class Application
 	/// </summary>
 	public static Vector2 CursorPosition
 	{
-		get => (Vector2)Native.QApp.CursorPosition();
+		get => TryGetLinuxCursorPosition( out var position )
+			? position / DpiScale
+			: (Vector2)Native.QApp.CursorPosition();
 		set
 		{
 			Native.QApp.SetCursorPosition( value );
@@ -63,7 +164,9 @@ public static class Application
 	/// </summary>
 	public static Vector2 UnscaledCursorPosition
 	{
-		get => (Vector2)Native.QApp.NativeCursorPosition();
+		get => TryGetLinuxCursorPosition( out var position )
+			? position
+			: (Vector2)Native.QApp.NativeCursorPosition();
 		set
 		{
 			Native.QApp.SetNativeCursorPosition( value );
@@ -115,7 +218,7 @@ public static class Application
 	/// </summary>
 	public static MouseButtons MouseButtons
 	{
-		get => Native.QApp.mouseButtons();
+		get => Native.QApp.mouseButtons() | GetLinuxMouseButtons();
 	}
 
 
@@ -124,7 +227,9 @@ public static class Application
 	/// </summary>
 	public static bool IsKeyDown( Editor.KeyCode code )
 	{
-		return CQUtils.IsKeyPressed( (int)code );
+		return TryGetLinuxKeyDown( code, out var down )
+			? down
+			: CQUtils.IsKeyPressed( (int)code );
 	}
 
 	/// <summary>
