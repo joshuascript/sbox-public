@@ -185,7 +185,7 @@ public ref struct KeyEvent
 
 	string GetKeyName()
 	{
-		// Check if the key is a native key that isn't supported by KeyCode
+		if ( !OperatingSystem.IsLinux() )
 		switch ( NativeKeyCode )
 		{
 			case 0x0D: return "Enter"; // Enter
