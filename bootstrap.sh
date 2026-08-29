@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Must keep LF line endings or Linux won't execute it (enforced by .gitattributes)
 #
 # SboxBuild resolves every path from the current working directory, so this must

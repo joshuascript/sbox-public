@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Run ./sbox under gdb and auto-capture a full backtrace whenever the Vulkan
 # swapchain reports a present stall.
 #

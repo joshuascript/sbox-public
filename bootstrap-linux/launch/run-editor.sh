@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Launch the s&box editor with the engine's own HarfBuzz preloaded.
 #
 # The engine ships libHarfBuzzSharp.so (SkiaSharp's statically-linked HarfBuzz) in
@@ -43,10 +43,15 @@ fi
 # Prepend rather than overwrite - keep anything the caller (or Steam) already set.
 export LD_PRELOAD="$HARFBUZZ${LD_PRELOAD:+:$LD_PRELOAD}"
 export LD_LIBRARY_PATH="$NATIVE_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="$NATIVE_DIR/qt5_plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="$NATIVE_DIR/qt5_plugins/platforms"
+unset QML2_IMPORT_PATH
 
 if [ "${1:-}" = "--print-env" ]; then
 	echo "LD_PRELOAD=$LD_PRELOAD"
 	echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+	echo "QT_PLUGIN_PATH=$QT_PLUGIN_PATH"
+	echo "QT_QPA_PLATFORM_PLUGIN_PATH=$QT_QPA_PLATFORM_PLUGIN_PATH"
 	echo "exec $EXE"
 	exit 0
 fi

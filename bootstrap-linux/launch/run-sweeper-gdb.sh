@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # run-sbox-gdb.sh, but pointed at a project instead of the launcher menu.
 #
 # sbox-dev with no -project doesn't run the editor at all: it re-execs sbox-launcher

@@ -33,6 +33,8 @@
 # Text files
 !*.txt
 !*.md
+!flake.nix
+!flake.lock
 !*.ini
 !*.cfg
 !*.json

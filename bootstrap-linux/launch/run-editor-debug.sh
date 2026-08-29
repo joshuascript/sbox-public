@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Launch the editor with the Linux input diagnostics turned on.
 #
 # Wraps run-editor.sh (which handles the HarfBuzz preload and LD_LIBRARY_PATH) and adds:
